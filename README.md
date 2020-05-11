@@ -1,6 +1,6 @@
 # SVD Expander
 
-This crate expands arrays and inheritance chains in CMSIS-SVD specifications. 
+This crate expands arrays and resolves inheritance chains in CMSIS-SVD specifications. 
 
 ## Example usage:
 
