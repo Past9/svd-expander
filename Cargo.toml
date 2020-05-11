@@ -1,0 +1,14 @@
+[package]
+name = "svd-expander"
+description = "Expands arrays and inheritance chains in CMSIS-SVD specification"
+version = "0.1.0"
+authors = ["Ross Tollefson <ross@past9systems.com>"]
+edition = "2018"
+keywords = ["CMSIS", "SVD", "parser", "inheritance", "expander"]
+license = "MIT or Apache-2.0"
+readme = "README.md"
+
+[dependencies]
+svd-parser = "0.9.0"
+anyhow = "1.0.28"
+xmltree = "0.8" 
