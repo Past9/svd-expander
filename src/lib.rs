@@ -11,7 +11,7 @@ pub use cluster::ClusterSpec;
 pub use device::{CpuSpec, DeviceSpec, EndianSpec};
 pub use error::{Result, SvdExpanderError};
 pub use field::FieldSpec;
-pub use peripheral::{AddressBlockSpec, InterruptSpec};
+pub use peripheral::{AddressBlockSpec, InterruptSpec, PeripheralSpec};
 pub use register::RegisterSpec;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
