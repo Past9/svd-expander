@@ -7,6 +7,7 @@ edition = "2018"
 keywords = ["CMSIS", "SVD", "parser", "inheritance", "expander"]
 license = "MIT or Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/Past9/svd-expander"
 
 [dependencies]
 svd-parser = "0.9.0"
