@@ -1,6 +1,6 @@
 [package]
 name = "svd-expander"
-description = "Expands arrays and inheritance chains in CMSIS-SVD specification"
+description = "Expands arrays and inheritance chains in CMSIS-SVD specifications"
 version = "0.1.0"
 authors = ["Ross Tollefson <ross@past9systems.com>"]
 edition = "2018"
