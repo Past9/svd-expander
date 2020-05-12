@@ -2,7 +2,7 @@
 //! 
 //! ## Example usage:
 //! 
-//! ```rust
+//! ```no_run
 //! use std::fs::File;
 //! use std::io::Read;
 //! use svd_expander::DeviceSpec;
