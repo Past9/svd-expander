@@ -48,12 +48,9 @@ impl RegisterSpec {
               &r.name
             )));
           }
-          di
+          di.to_owned()
         } else {
-          return Err(SvdExpanderError::new(&format!(
-            "Register {}: 'dimIndex' element is required",
-            &r.name
-          )));
+          (0..d.dim).map(|v| v.to_string()).collect()
         };
 
         let prototype = Self::from_register_info(fi, preceding_path)?;
@@ -74,7 +71,6 @@ impl RegisterSpec {
 
     Ok(specs)
   }
-
   /// The full path to the register that this register inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
@@ -92,7 +88,7 @@ impl RegisterSpec {
   }
 
   pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
-    Self {
+    let mut register = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
       name: self.name.clone(),
@@ -102,12 +98,16 @@ impl RegisterSpec {
       reset_value: self.reset_value,
       reset_mask: self.reset_mask,
       access: self.access,
-      fields: self
+      fields: Vec::new(),
+    };
+
+    register.fields = self
         .fields
         .iter()
-        .map(|f| f.clone_with_preceding_path(preceding_path))
-        .collect(),
-    }
+        .map(|f| f.clone_with_preceding_path(&register.path()))
+        .collect();
+
+    register
   }
 
   pub(crate) fn inherit_from(&mut self, rs: &RegisterSpec) -> bool {

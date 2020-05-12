@@ -36,12 +36,9 @@ impl FieldSpec {
               &f.name
             )));
           }
-          di
+          di.to_owned()
         } else {
-          return Err(SvdExpanderError::new(&format!(
-            "Field {}: 'dimIndex' element is required",
-            &f.name
-          )));
+          (0..d.dim).map(|v| v.to_string()).collect()
         };
 
         let prototype = Self::from_field_info(fi, preceding_path);

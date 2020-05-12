@@ -1227,7 +1227,7 @@ mod tests {
           </peripheral>
 
           <!-- Timer 2 -->
-          <peripheral derivedFrom="TIMER0">
+          <peripheral derivedFrom="TIMER1">
             <name>TIMER2</name>
             <baseAddress>0x40010200</baseAddress>
             <interrupt>
@@ -1244,14 +1244,63 @@ mod tests {
     let timer0 = ds.get_peripheral("TIMER0").unwrap();
     assert_eq!("TIMER0", timer0.name);
     assert_eq!(1, timer0.interrupts.len());
+    assert_eq!(0x40010000, timer0.base_address);
+    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer0.description.clone().unwrap());
+    assert_eq!(11, timer0.registers.len());
+    assert_eq!("RELOAD[0]", timer0.registers[7].name);
+    assert_eq!("RELOAD[1]", timer0.registers[8].name);
+    assert_eq!("RELOAD[2]", timer0.registers[9].name);
+    assert_eq!("RELOAD[3]", timer0.registers[10].name);
 
     let timer1 = ds.get_peripheral("TIMER1").unwrap();
     assert_eq!("TIMER1", timer1.name);
     assert_eq!(1, timer1.interrupts.len());
+    assert_eq!(0x40010100, timer1.base_address);
+    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer1.description.clone().unwrap());
+    assert_eq!(11, timer1.registers.len());
+    assert_eq!("RELOAD[0]", timer1.registers[7].name);
+    assert_eq!("RELOAD[1]", timer1.registers[8].name);
+    assert_eq!("RELOAD[2]", timer1.registers[9].name);
+    assert_eq!("RELOAD[3]", timer1.registers[10].name);
 
     let timer2 = ds.get_peripheral("TIMER2").unwrap();
     assert_eq!("TIMER2", timer2.name);
     assert_eq!(1, timer2.interrupts.len());
+    assert_eq!(0x40010200, timer2.base_address);
+    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer2.description.clone().unwrap());
+    assert_eq!(11, timer2.registers.len());
+    assert_eq!("RELOAD[0]", timer2.registers[7].name);
+    assert_eq!("RELOAD[1]", timer2.registers[8].name);
+    assert_eq!("RELOAD[2]", timer2.registers[9].name);
+    assert_eq!("RELOAD[3]", timer2.registers[10].name);
+
+    let timer0_interrupt_mode = ds.get_field("TIMER0.INT.MODE").unwrap();
+    assert_eq!("MODE", timer0_interrupt_mode.name);
+    assert!(timer0_interrupt_mode.derived_from_path().is_none());
+
+    let timer1_interrupt_mode = ds.get_field("TIMER1.INT.MODE").unwrap();
+    assert_eq!("MODE", timer1_interrupt_mode.name);
+    assert!(timer1_interrupt_mode.derived_from_path().is_none());
+
+    let timer2_interrupt_mode = ds.get_field("TIMER2.INT.MODE").unwrap();
+    assert_eq!("MODE", timer2_interrupt_mode.name);
+    assert!(timer2_interrupt_mode.derived_from_path().is_none());
+
+    assert_eq!("RELOAD[0]", ds.get_register("TIMER0.RELOAD[0]").unwrap().name);
+    assert_eq!("RELOAD[1]", ds.get_register("TIMER0.RELOAD[1]").unwrap().name);
+    assert_eq!("RELOAD[2]", ds.get_register("TIMER0.RELOAD[2]").unwrap().name);
+    assert_eq!("RELOAD[3]", ds.get_register("TIMER0.RELOAD[3]").unwrap().name);
+
+    assert_eq!("RELOAD[0]", ds.get_register("TIMER1.RELOAD[0]").unwrap().name);
+    assert_eq!("RELOAD[1]", ds.get_register("TIMER1.RELOAD[1]").unwrap().name);
+    assert_eq!("RELOAD[2]", ds.get_register("TIMER1.RELOAD[2]").unwrap().name);
+    assert_eq!("RELOAD[3]", ds.get_register("TIMER1.RELOAD[3]").unwrap().name);
+
+    assert_eq!("RELOAD[0]", ds.get_register("TIMER2.RELOAD[0]").unwrap().name);
+    assert_eq!("RELOAD[1]", ds.get_register("TIMER2.RELOAD[1]").unwrap().name);
+    assert_eq!("RELOAD[2]", ds.get_register("TIMER2.RELOAD[2]").unwrap().name);
+    assert_eq!("RELOAD[3]", ds.get_register("TIMER2.RELOAD[3]").unwrap().name);
+
 
   }
 }

@@ -42,7 +42,7 @@ pub struct ClusterSpec {
 impl ClusterSpec {
   pub(crate) fn new(c: &Cluster, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match c {
-      Cluster::Single(ref ci) => vec![Self::from_cluster_info(ci, preceding_path)],
+      Cluster::Single(ref ci) => vec![Self::from_cluster_info(ci, preceding_path)?],
       Cluster::Array(ref ci, ref d) => {
         let dim_indices = if let Some(ref di) = d.dim_index {
           if d.dim != di.len() as u32 {
@@ -51,15 +51,12 @@ impl ClusterSpec {
               &c.name
             )));
           }
-          di
+          di.to_owned()
         } else {
-          return Err(SvdExpanderError::new(&format!(
-            "Cluster {}: 'dimIndex' element is required",
-            &c.name
-          )));
+          (0..d.dim).map(|v| v.to_string()).collect()
         };
 
-        let prototype = Self::from_cluster_info(ci, preceding_path);
+        let prototype = Self::from_cluster_info(ci, preceding_path)?;
         let mut cluster_specs = Vec::with_capacity(d.dim as usize);
 
         for (n, dim_index) in dim_indices.iter().enumerate() {
@@ -122,7 +119,7 @@ impl ClusterSpec {
   }
 
   pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
-    Self {
+    let mut cluster = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
       name: self.name.clone(),
@@ -132,17 +129,23 @@ impl ClusterSpec {
       default_register_reset_value: self.default_register_reset_value,
       default_register_reset_mask: self.default_register_reset_mask,
       default_register_access: self.default_register_access,
-      registers: self
-        .registers
-        .iter()
-        .map(|r| r.clone_with_preceding_path(preceding_path))
-        .collect(),
-      clusters: self
-        .clusters
-        .iter()
-        .map(|c| c.clone_with_preceding_path(preceding_path))
-        .collect(),
-    }
+      registers: Vec::new(),
+      clusters: Vec::new(),
+    };
+
+    cluster.registers = self
+      .registers
+      .iter()
+      .map(|r| r.clone_with_preceding_path(&cluster.path()))
+      .collect();
+
+    cluster.clusters = self
+      .clusters
+      .iter()
+      .map(|c| c.clone_with_preceding_path(&cluster.path()))
+      .collect();
+
+    cluster
   }
 
   pub(crate) fn mutate_clusters<F>(&mut self, f: F) -> SvdExpanderResult<bool>
@@ -321,7 +324,7 @@ impl ClusterSpec {
     changed
   }
 
-  fn from_cluster_info(ci: &ClusterInfo, preceding_path: &str) -> Self {
+  fn from_cluster_info(ci: &ClusterInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
     let mut cluster = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: ci.derived_from.clone(),
@@ -339,29 +342,29 @@ impl ClusterSpec {
       clusters: Vec::with_capacity(0),
     };
 
-    cluster.registers = ci
-      .children
-      .iter()
-      .filter_map(|child| match child {
-        RegisterCluster::Register(ref r) => Some(RegisterSpec::new(r, &cluster.path())),
-        RegisterCluster::Cluster(_) => None,
-      })
-      .flatten()
-      .flatten()
-      .collect();
+    cluster.registers = {
+      let mut registers = Vec::new();
+      for register in ci.children.iter().filter_map(|rc| match rc {
+        RegisterCluster::Register(ref r) => Some(r),
+        RegisterCluster::Cluster(_) => None
+      }) {
+        registers.extend(RegisterSpec::new(register, &cluster.name)?);
+      }
+      registers
+    };
 
-    cluster.clusters = ci
-      .children
-      .iter()
-      .filter_map(|child| match child {
-        RegisterCluster::Cluster(ref c) => Some(ClusterSpec::new(c, &cluster.path())),
-        RegisterCluster::Register(_) => None,
-      })
-      .flatten()
-      .flatten()
-      .collect();
+    cluster.clusters = {
+      let mut clusters = Vec::new();
+      for cluster in ci.children.iter().filter_map(|rc| match rc {
+        RegisterCluster::Cluster(ref c) => Some(c),
+        RegisterCluster::Register(_) => None
+      }) {
+        clusters.extend(ClusterSpec::new(cluster, &cluster.name)?);
+      }
+      clusters
+    };
 
-    cluster
+    Ok(cluster)
   }
 
   fn interpolate_array_params(&mut self, index: String, address_offset: u32) {

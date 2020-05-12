@@ -1,5 +1,5 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::error::SvdExpanderResult;
+use crate::{SvdExpanderError, error::SvdExpanderResult};
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
 /// Describes an address range uniquely mapped to a peripheral. 
@@ -138,29 +138,31 @@ impl PeripheralSpec {
     };
 
     peripheral.registers = match p.registers {
-      Some(ref register_clusters) => register_clusters
-        .iter()
-        .filter_map(|child| match child {
-          RegisterCluster::Register(ref r) => Some(RegisterSpec::new(r, &peripheral.name)),
-          RegisterCluster::Cluster(_) => None,
-        })
-        .flatten()
-        .flatten()
-        .collect(),
-      None => Vec::new(),
+      Some(ref register_clusters) => {
+        let mut registers = Vec::new();
+        for register in register_clusters.iter().filter_map(|rc| match rc {
+          RegisterCluster::Register(ref r) => Some(r),
+          RegisterCluster::Cluster(_) => None
+        }) {
+          registers.extend(RegisterSpec::new(register, &peripheral.name)?);
+        }
+        registers
+      },
+      None => Vec::new()
     };
 
     peripheral.clusters = match p.registers {
-      Some(ref register_clusters) => register_clusters
-        .iter()
-        .filter_map(|child| match child {
-          RegisterCluster::Cluster(ref c) => Some(ClusterSpec::new(c, &peripheral.name)),
-          RegisterCluster::Register(_) => None,
-        })
-        .flatten()
-        .flatten()
-        .collect(),
-      None => Vec::new(),
+      Some(ref register_clusters) => {
+        let mut clusters = Vec::new();
+        for cluster in register_clusters.iter().filter_map(|rc| match rc {
+          RegisterCluster::Cluster(ref c) => Some(c),
+          RegisterCluster::Register(_) => None
+        }) {
+          clusters.extend(ClusterSpec::new(cluster, &peripheral.name)?);
+        }
+        clusters
+      },
+      None => Vec::new()
     };
 
     Ok(peripheral)
