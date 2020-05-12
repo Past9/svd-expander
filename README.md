@@ -20,3 +20,5 @@ fn main() {
     println!("{:#?}", DeviceSpec::from_xml(xml).unwrap());
 }
 ```
+
+This crate is immature but is intended for use in code generators. It is under active development and bug reports are welcome.

@@ -4,18 +4,39 @@ use super::register::RegisterSpec;
 use super::{AccessSpec, FieldSpec};
 use crate::error::{SvdExpanderError, SvdExpanderResult};
 
+/// Describes a cluster of registers that exist on a peripheral. Clusters may be top-level
+/// constructs of a peripheral or may be nested within other clusters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterSpec {
   preceding_path: String,
-  pub derived_from: Option<String>,
+  derived_from: Option<String>,
+
+  /// Name that identifies the cluster. Must be unique within the scope of its parent.
   pub name: String,
+
+  /// Description of the details of the register cluster.
   pub description: Option<String>,
+
+  /// Cluster's starting address relative to its parent.
   pub address_offset: u32,
+
+  /// Default bit width of any register contained within this cluster.
   pub default_register_size: Option<u32>,
+
+  /// Default value after reset of any register contained within this cluster.
   pub default_register_reset_value: Option<u32>,
+
+  /// Default register bits that have a defined reset value for any register contained within 
+  /// this cluster.
   pub default_register_reset_mask: Option<u32>,
+
+  /// Default access rights of any register contained within this cluster.
   pub default_register_access: Option<AccessSpec>,
+
+  /// Top-level registers that exist within this cluster.
   pub registers: Vec<RegisterSpec>,
+
+  /// Top-level clusters nested within this cluster.
   pub clusters: Vec<ClusterSpec>,
 }
 impl ClusterSpec {
@@ -57,6 +78,7 @@ impl ClusterSpec {
     Ok(specs)
   }
 
+  /// The full path to the cluster that this cluster inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
@@ -67,10 +89,12 @@ impl ClusterSpec {
     }
   }
 
+  /// The full path to this cluster. 
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }
 
+  /// Recursively iterates all the register clusters contained within this cluster.
   pub fn iter_clusters<'a>(&'a self) -> Box<dyn Iterator<Item = &ClusterSpec> + 'a> {
     Box::new(
       self
@@ -81,6 +105,7 @@ impl ClusterSpec {
     )
   }
 
+  /// Recursively iterates all the registers contained within this cluster.
   pub fn iter_registers<'a>(&'a self) -> Box<dyn Iterator<Item = &RegisterSpec> + 'a> {
     Box::new(
       self
@@ -91,6 +116,7 @@ impl ClusterSpec {
     )
   }
 
+  /// Recursively iterates all the register fields contained within this cluster.
   pub fn iter_fields<'a>(&'a self) -> Box<dyn Iterator<Item = &FieldSpec> + 'a> {
     Box::new(self.iter_registers().flat_map(|r| r.fields.iter()))
   }

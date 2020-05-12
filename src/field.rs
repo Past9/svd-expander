@@ -3,14 +3,25 @@ use svd_parser::{Field, FieldInfo};
 use super::AccessSpec;
 use crate::error::{SvdExpanderError, SvdExpanderResult};
 
+/// Describes a field on a register.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldSpec {
   preceding_path: String,
-  pub derived_from: Option<String>,
+  derived_from: Option<String>,
+
+  /// A name that identfies the field. Must be unique within the parent register.
   pub name: String,
+
+  /// Description of the field's usage, purpose, and/or operation.
   pub description: Option<String>,
+
+  /// The position of the least-significant bit of this field within its register. 
   pub offset: u32,
+
+  /// The bit width of the field.
   pub width: u32,
+
+  /// The access rights to the field.
   pub access: Option<AccessSpec>,
 }
 impl FieldSpec {
@@ -52,6 +63,7 @@ impl FieldSpec {
     Ok(specs)
   }
 
+  /// The full path to the field that this field inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
@@ -62,6 +74,7 @@ impl FieldSpec {
     }
   }
 
+  /// The full path to this field. 
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }

@@ -4,17 +4,36 @@ use super::field::FieldSpec;
 use super::AccessSpec;
 use crate::error::{SvdExpanderError, SvdExpanderResult};
 
+/// Describes a register. Registers may be top-level constructs of a peripheral or may be nested 
+/// within register clusters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegisterSpec {
   preceding_path: String,
-  pub derived_from: Option<String>,
+  derived_from: Option<String>,
+
+  /// Name that identifies the register. Must be unique within the scope of its parent.
   pub name: String,
+
+  /// Description of the details of the register. May describe its purpose, operation, and effects
+  /// on other parts of the device.
   pub description: Option<String>,
+
+  /// Register's starting address relative to its parent.
   pub address_offset: u32,
+
+  /// The bit width of the register.
   pub size: Option<u32>,
+
+  /// The value of the register after reset.
   pub reset_value: Option<u32>,
+
+  /// The bits of the register that have a defined reset value.
   pub reset_mask: Option<u32>,
+
+  /// The access rights of the register.
   pub access: Option<AccessSpec>,
+
+  /// The fields that exist on the register.
   pub fields: Vec<FieldSpec>,
 }
 impl RegisterSpec {
@@ -56,6 +75,7 @@ impl RegisterSpec {
     Ok(specs)
   }
 
+  /// The full path to the register that this register inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
@@ -66,6 +86,7 @@ impl RegisterSpec {
     }
   }
 
+  /// The full path this register.
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }

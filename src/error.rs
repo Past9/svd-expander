@@ -1,10 +1,13 @@
 use anyhow::Error as AnyhowError;
 use std::{error::Error, fmt};
 
+/// Convenience type for a result that may contain an `SvdExpanderError`.
 pub type SvdExpanderResult<T> = std::result::Result<T, SvdExpanderError>;
 
+/// Error struct for all errors thrown by this crate or the crates on which it depends.
 #[derive(Debug)]
 pub struct SvdExpanderError {
+  /// Description of the error that occurred.
   pub details: String,
 }
 impl SvdExpanderError {

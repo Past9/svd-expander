@@ -2,11 +2,26 @@ use super::{peripheral::PeripheralSpec, AccessSpec, ClusterSpec, FieldSpec, Regi
 use crate::error::{SvdExpanderError, SvdExpanderResult};
 use svd_parser::{Cpu, Device, Endian};
 
+/// Defines the endianness of a CPU.
+///
+/// # Values
+///
+/// * `Little` = Little-endian memory (least-significant bit gets allocated at the lowest address).
+/// * `Big` = Big-endian memory (most-significant bit gets allocated at the lowest address).
+/// * `Selectable` = Endianness is configurable and becomes active after the next reset.
+/// * `Other` = The endianness is neither big nor little endian.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EndianSpec {
+  /// Little-endian memory (least-significant bit gets allocated at the lowest address).
   Little,
+
+  /// Big-endian memory (most-significant bit gets allocated at the lowest address).
   Big,
+
+  /// Endianness is configurable and becomes active after the next reset.
   Selectable,
+
+  /// The endianness is neither big nor little endian.
   Other,
 }
 impl EndianSpec {
@@ -20,14 +35,29 @@ impl EndianSpec {
   }
 }
 
+/// Describes the processor included in the microcontroller device.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CpuSpec {
+  /// The unique name of the device's CPU.
   pub name: String,
+
+  /// The hardware revision of the processor. The format is rNpM (N,M = [0 - 99]).
   pub revision: String,
+
+  /// The endianness of the processor. 
   pub endian: EndianSpec,
+
+  /// Whether the processor is equipped with a memory protection unit.
   pub mpu_present: bool,
+
+  /// Whether the processor is equipped with a hardware floating point unit.
   pub fpu_present: bool,
+
+  /// The number of bits available in the Nested Vector Interrupt Controller (NVIC) for 
+  /// configuring priority.
   pub nvic_priority_bits: u32,
+
+  /// Whether the processor implements a vendor-specific System Tick Timer.
   pub has_vendor_systick: bool,
 }
 impl CpuSpec {
@@ -44,21 +74,74 @@ impl CpuSpec {
   }
 }
 
+/// Represents information about a device specified in a CMSIS-SVD file. 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceSpec {
+  // Uniquely identifies the device.
   pub name: String,
+
+  /// The full name of the vendor of the device.
   pub version: Option<String>,
+
+  /// Description of the main features of the device (i.e. CPU, clock frequency, peripheral 
+  /// overview).
   pub description: Option<String>,
+
+  /// The number of data bits uniquely selected by each address. The value for Cortex-M-based 
+  /// devices is `8` (byte-addressable).
   pub address_unit_bits: Option<u32>,
+
+  /// The bit width of the maximum single data transfer supported by bu bus infrastructure.
+  /// Expected value for Cortex-M-based devices is 32. 
   pub width: Option<u32>,
+
+  /// The processor included in the device.
   pub cpu: Option<CpuSpec>,
+
+  /// The device's peripherals.
   pub peripherals: Vec<PeripheralSpec>,
+
+  /// Default bit width of any register contained in the device.
   pub default_register_size: Option<u32>,
+
+  /// Default value of all registers after reset.
   pub default_register_reset_value: Option<u32>,
+
+  /// Defines which register bits have a defined reset value.
   pub default_register_reset_mask: Option<u32>,
+
+  /// Default access rights for all registers.
   pub default_register_access: Option<AccessSpec>,
 }
 impl DeviceSpec {
+
+  /// Creates a new device by parsing an XML string following the CMSIS-SVD specification.
+  /// Expands all array definitions and resolves inheritance chains to fully resolve all 
+  /// populate all the components of the device. 
+  ///
+  /// # Arguments
+  /// 
+  /// * `xml` = An XML string containing a device specification in the CMSIS-SVD format.
+  ///
+  /// # Example
+  ///
+  /// ```
+  /// use svd_expander::DeviceSpec;
+  /// let device = DeviceSpec::from_xml(
+  ///   r##"
+  ///   <device
+  ///     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="1.1" xsi:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
+  ///     <name>STM32F303</name>
+  ///     <version>1.2</version>
+  ///     <peripherals>
+  ///     </peripherals>
+  ///   </device>
+  ///   "##
+  /// ).unwrap();
+  ///
+  /// assert_eq!("STM32F303", device.name);
+  /// assert_eq!("1.2", device.version.unwrap());
+  /// ```
   pub fn from_xml(xml: &str) -> SvdExpanderResult<Self> {
     Ok(Self::new(&svd_parser::parse(xml)?)?)
   }
@@ -95,18 +178,29 @@ impl DeviceSpec {
     Ok(device)
   }
 
+  /// Recursively iterates all the register clusters on the device.
   pub fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_clusters())
   }
 
+  /// Recursively iterates all the registers on the device.
   pub fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_registers())
   }
 
+  /// Recursively iterates all the register fields on the device.
   pub fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_fields())
   }
 
+  /// Gets the peripheral that exists at the given path. Peripherals 
+  /// top-level constructs and can't be nested, so a peripheral path
+  /// is simply the name of the peripheral.
+  ///
+  /// # Arguments
+  /// 
+  /// * `path` = The path to the peripheral. Since peripherals are top-level
+  /// components and can't be nested, this is just the name of the peripheral.
   pub fn get_peripheral(&self, path: &str) -> SvdExpanderResult<&PeripheralSpec> {
     match self.peripherals.iter().find(|p| p.path() == path) {
       Some(p) => Ok(p),
@@ -117,6 +211,11 @@ impl DeviceSpec {
     }
   }
 
+  /// Gets the register cluster that exists at the given path. 
+  ///
+  /// # Arguments
+  /// 
+  /// * `path` = The path to the register cluster. 
   pub fn get_cluster(&self, path: &str) -> SvdExpanderResult<&ClusterSpec> {
     match self.iter_clusters().find(|c| c.path() == path) {
       Some(c) => Ok(c),
@@ -127,6 +226,11 @@ impl DeviceSpec {
     }
   }
 
+  /// Gets the register that exists at the given path. 
+  ///
+  /// # Arguments
+  /// 
+  /// * `path` = The path to the register. 
   pub fn get_register(&self, path: &str) -> SvdExpanderResult<&RegisterSpec> {
     match self.iter_registers().find(|r| r.path() == path) {
       Some(r) => Ok(r),
@@ -137,6 +241,11 @@ impl DeviceSpec {
     }
   }
 
+  /// Gets the register field that exists at the given path. 
+  ///
+  /// # Arguments
+  /// 
+  /// * `path` = The path to the register field. 
   pub fn get_field(&self, path: &str) -> SvdExpanderResult<&FieldSpec> {
     match self.iter_fields().find(|f| f.path() == path) {
       Some(r) => Ok(r),
@@ -234,7 +343,7 @@ mod tests {
   fn can_create_from_xml() {
     let el: Element = Element::parse(
       r##"
-      <device>
+      <device
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" schemaVersion="1.1" xsi:noNamespaceSchemaLocation="CMSIS-SVD_Schema_1_1.xsd">
 
         <name>FOO</name>

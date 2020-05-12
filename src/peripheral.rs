@@ -2,10 +2,20 @@ use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec}
 use crate::error::SvdExpanderResult;
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
+/// Describes an address range uniquely mapped to a peripheral. 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AddressBlockSpec {
+  /// The start address of the address block relative to the peripheral's base address.
   pub offset: u32,
+
+  /// The number of address unit bits covered by this address block. The end of an address block is
+  /// the sum of the peripheral's base address and the address block's offset and size.
   pub size: u32,
+
+  /// What the address block is used for. The following predefined values are expected:
+  /// * `registers`
+  /// * `buffer`
+  /// * `reserved`
   pub usage: String,
 }
 impl AddressBlockSpec {
@@ -18,10 +28,16 @@ impl AddressBlockSpec {
   }
 }
 
+/// Describes an interrupt that exists on a peripheral.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InterruptSpec {
+  /// The unique name of the interrupt.
   pub name: String,
+
+  /// Overview of the interrupt's purpose and function.
   pub description: Option<String>,
+
+  /// The index value of the interrupt.
   pub value: u32,
 }
 impl InterruptSpec {
@@ -45,22 +61,54 @@ impl InterruptSpec {
   }
 }
 
+/// Describes a peripheral on a device.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PeripheralSpec {
-  pub derived_from: Option<String>,
+  derived_from: Option<String>,
+
+  /// Name of the peripheral. Must be unique for the entire device.
   pub name: String,
+
+  /// The version of the peripheral description.
   pub version: Option<String>,
+
+  /// Human-friendly name of the peripheral.
   pub display_name: Option<String>,
+
+  /// Name of the group to which this peripheral belongs. This is optional and is mostly
+  /// intended to visually group the peripheral with related peripherals in documentation 
+  /// and user interfaces.
   pub group_name: Option<String>,
+
+  /// Overview of the purpose and functionality of the peripheral.
   pub description: Option<String>,
+
+  /// Lowest address reserved or used by the peripheral.
   pub base_address: u32,
+
+  /// An address range uniquely mapped to this peripheral. 
   pub address_block: Option<AddressBlockSpec>,
+
+  /// Default bit-width of any register contained in this peripheral.
   pub default_register_size: Option<u32>,
+
+  /// Default value after reset of any register contained in this peripheral.
   pub default_register_reset_value: Option<u32>,
+
+  /// Default register bits that have a defined reset value for any register in this peripheral.
   pub default_register_reset_mask: Option<u32>,
+
+  /// Default access rights for any register contained in this peripheral.
   pub default_register_access: Option<AccessSpec>,
+
+  /// Interrupts that exist on this peripheral.
   pub interrupts: Vec<InterruptSpec>,
+
+  /// Top-level registers that exist on this peripheral.
   pub registers: Vec<RegisterSpec>,
+
+  /// Top-level register clusters that exist on this peripheral. Clusters may contain registers
+  /// or other clusters.  
   pub clusters: Vec<ClusterSpec>,
 }
 impl PeripheralSpec {
@@ -118,10 +166,12 @@ impl PeripheralSpec {
     Ok(peripheral)
   }
 
+  /// Recursively iterates all the register clusters contained within this peripheral.
   pub fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
     self.clusters.iter().flat_map(|c| c.iter_clusters())
   }
 
+  /// Recursively iterates all the registers contained within this peripheral.
   pub fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
     self
       .clusters
@@ -130,6 +180,7 @@ impl PeripheralSpec {
       .chain(self.registers.iter())
   }
 
+  /// Recursively iterates all the register fields contained within this peripheral.
   pub fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
     self
       .clusters
@@ -138,10 +189,15 @@ impl PeripheralSpec {
       .chain(self.registers.iter().flat_map(|r| r.fields.iter()))
   }
 
+  /// The full path of the peripheral that this peripheral inherits from (if any).
+  /// Since all peripherals are top-level components of the device, this is just the
+  /// name of the other peripheral.
   pub fn derived_from_path(&self) -> Option<String> {
     self.derived_from.clone()
   }
 
+  /// The full path of this peripheral. Since all peripherals are top-level components of the
+  /// device, this is just the name of the peripheral. 
   pub fn path(&self) -> String {
     self.name.clone()
   }
