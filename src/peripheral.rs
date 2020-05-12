@@ -316,10 +316,7 @@ impl PeripheralSpec {
         if descendant.inherit_from(ancestor) {
           changed = true;
         }
-      } else {
-        self.interrupts.push(ancestor.clone());
-        changed = true;
-      }
+      } 
     }
 
     for ancestor in ps.registers.iter() {
@@ -602,7 +599,7 @@ mod tests {
       descendant_ps.address_block.clone().unwrap().usage
     );
 
-    assert_eq!(2, descendant_ps.interrupts.len());
+    assert_eq!(1, descendant_ps.interrupts.len());
 
     assert_eq!("I1", descendant_ps.interrupts[0].name);
     assert_eq!(
@@ -610,13 +607,6 @@ mod tests {
       descendant_ps.interrupts[0].description.clone().unwrap()
     );
     assert_eq!(45, descendant_ps.interrupts[0].value);
-
-    assert_eq!("I2", descendant_ps.interrupts[1].name);
-    assert_eq!(
-      "Corge 2",
-      descendant_ps.interrupts[1].description.clone().unwrap()
-    );
-    assert_eq!(23, descendant_ps.interrupts[1].value);
 
     assert_eq!(2, descendant_ps.registers.len());
     assert_eq!("R1", descendant_ps.registers[0].name);
@@ -835,7 +825,7 @@ mod tests {
   }
 
   #[test]
-  fn inherits_from_returns_true_for_added_inherited_interrupt() {
+  fn does_not_add_inherited_interrupt() {
     let descendant_el: Element = Element::parse(
       r##"
       <peripheral>
@@ -875,22 +865,16 @@ mod tests {
 
     let changed = descendant_ps.inherit_from(&ancestor_ps);
 
-    assert!(changed);
+    assert!(!changed);
 
     assert_eq!("FOO", descendant_ps.name);
     assert_eq!(3000, descendant_ps.base_address);
 
-    assert_eq!(2, descendant_ps.interrupts.len());
+    assert_eq!(1, descendant_ps.interrupts.len());
 
     assert_eq!("I1", descendant_ps.interrupts[0].name);
+    assert!(descendant_ps.interrupts[0].description.is_none());
     assert_eq!(45, descendant_ps.interrupts[0].value);
-
-    assert_eq!("I2", descendant_ps.interrupts[1].name);
-    assert_eq!(
-      "Corge",
-      descendant_ps.interrupts[1].description.clone().unwrap()
-    );
-    assert_eq!(23, descendant_ps.interrupts[1].value);
   }
 
   #[test]
