@@ -1,5 +1,5 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::{SvdExpanderError, error::SvdExpanderResult};
+use crate::{error::SvdExpanderResult};
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
 /// Describes an address range uniquely mapped to a peripheral. 
