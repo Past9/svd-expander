@@ -1,5 +1,5 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::error::Result;
+use crate::error::SvdExpanderResult;
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,7 +9,7 @@ pub struct AddressBlockSpec {
   pub usage: String,
 }
 impl AddressBlockSpec {
-  pub fn new(ab: &AddressBlock) -> Self {
+  pub(crate) fn new(ab: &AddressBlock) -> Self {
     Self {
       offset: ab.offset,
       size: ab.size,
@@ -25,7 +25,7 @@ pub struct InterruptSpec {
   pub value: u32,
 }
 impl InterruptSpec {
-  pub fn new(is: &Interrupt) -> Self {
+  pub(crate) fn new(is: &Interrupt) -> Self {
     Self {
       name: is.name.clone(),
       description: is.description.clone(),
@@ -33,7 +33,7 @@ impl InterruptSpec {
     }
   }
 
-  pub fn inherit_from(&mut self, is: &InterruptSpec) -> bool {
+  pub(crate) fn inherit_from(&mut self, is: &InterruptSpec) -> bool {
     let mut changed = false;
 
     if self.description.is_none() && is.description.is_some() {
@@ -64,7 +64,7 @@ pub struct PeripheralSpec {
   pub clusters: Vec<ClusterSpec>,
 }
 impl PeripheralSpec {
-  pub fn new(p: &Peripheral) -> Result<Self> {
+  pub(crate) fn new(p: &Peripheral) -> SvdExpanderResult<Self> {
     let mut peripheral = Self {
       derived_from: p.derived_from.clone(),
       name: p.name.clone(),
@@ -118,9 +118,37 @@ impl PeripheralSpec {
     Ok(peripheral)
   }
 
-  pub fn mutate_clusters<F>(&mut self, f: F) -> Result<bool>
+  pub fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
+    self.clusters.iter().flat_map(|c| c.iter_clusters())
+  }
+
+  pub fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
+    self
+      .clusters
+      .iter()
+      .flat_map(|c| c.iter_registers())
+      .chain(self.registers.iter())
+  }
+
+  pub fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
+    self
+      .clusters
+      .iter()
+      .flat_map(|c| c.iter_fields())
+      .chain(self.registers.iter().flat_map(|r| r.fields.iter()))
+  }
+
+  pub fn derived_from_path(&self) -> Option<String> {
+    self.derived_from.clone()
+  }
+
+  pub fn path(&self) -> String {
+    self.name.clone()
+  }
+
+  pub(crate) fn mutate_clusters<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut ClusterSpec) -> Result<bool>,
+    F: Fn(&mut ClusterSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -134,13 +162,9 @@ impl PeripheralSpec {
     Ok(changed)
   }
 
-  pub fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
-    self.clusters.iter().flat_map(|c| c.iter_clusters())
-  }
-
-  pub fn mutate_registers<F>(&mut self, f: F) -> Result<bool>
+  pub(crate) fn mutate_registers<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut RegisterSpec) -> Result<bool>,
+    F: Fn(&mut RegisterSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -160,17 +184,9 @@ impl PeripheralSpec {
     Ok(changed)
   }
 
-  pub fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
-    self
-      .clusters
-      .iter()
-      .flat_map(|c| c.iter_registers())
-      .chain(self.registers.iter())
-  }
-
-  pub fn mutate_fields<F>(&mut self, f: F) -> Result<bool>
+  pub(crate) fn mutate_fields<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut FieldSpec) -> Result<bool>,
+    F: Fn(&mut FieldSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -190,23 +206,7 @@ impl PeripheralSpec {
     Ok(changed)
   }
 
-  pub fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
-    self
-      .clusters
-      .iter()
-      .flat_map(|c| c.iter_fields())
-      .chain(self.registers.iter().flat_map(|r| r.fields.iter()))
-  }
-
-  pub fn derived_from_path(&self) -> Option<String> {
-    self.derived_from.clone()
-  }
-
-  pub fn path(&self) -> String {
-    self.name.clone()
-  }
-
-  pub fn inherit_from(&mut self, ps: &PeripheralSpec) -> bool {
+  pub(crate) fn inherit_from(&mut self, ps: &PeripheralSpec) -> bool {
     let mut changed = false;
 
     if self.version.is_none() && ps.version.is_some() {
@@ -296,7 +296,7 @@ impl PeripheralSpec {
     changed
   }
 
-  pub fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_register_properties(
     &mut self,
     size: Option<u32>,
     reset_value: Option<u32>,

@@ -1,7 +1,7 @@
 use svd_parser::{Field, FieldInfo};
 
 use super::AccessSpec;
-use crate::error::{Result, SvdExpanderError};
+use crate::error::{SvdExpanderError, SvdExpanderResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldSpec {
@@ -14,7 +14,7 @@ pub struct FieldSpec {
   pub access: Option<AccessSpec>,
 }
 impl FieldSpec {
-  pub fn new(f: &Field, preceding_path: &str) -> Result<Vec<Self>> {
+  pub(crate) fn new(f: &Field, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match f {
       Field::Single(ref fi) => vec![Self::from_field_info(fi, preceding_path)],
       Field::Array(ref fi, ref d) => {
@@ -52,18 +52,6 @@ impl FieldSpec {
     Ok(specs)
   }
 
-  pub fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
-    Self {
-      preceding_path: preceding_path.to_owned(),
-      derived_from: None,
-      name: self.name.clone(),
-      description: self.description.clone(),
-      offset: self.offset,
-      width: self.width,
-      access: self.access,
-    }
-  }
-
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
@@ -76,6 +64,48 @@ impl FieldSpec {
 
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
+  }
+
+  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+    Self {
+      preceding_path: preceding_path.to_owned(),
+      derived_from: None,
+      name: self.name.clone(),
+      description: self.description.clone(),
+      offset: self.offset,
+      width: self.width,
+      access: self.access,
+    }
+  }
+
+  pub(crate) fn inherit_from(&mut self, fs: &FieldSpec) -> bool {
+    let mut changed = false;
+
+    if self.description.is_none() && fs.description.is_some() {
+      self.description = fs.description.clone();
+      changed = true;
+    }
+
+    if self.access.is_none() && fs.access.is_some() {
+      self.access = fs.access;
+      changed = true
+    }
+
+    changed
+  }
+
+  pub(crate) fn propagate_default_register_properties(
+    &mut self,
+    access: Option<AccessSpec>,
+  ) -> bool {
+    let mut changed = false;
+
+    if self.access.is_none() && access.is_some() {
+      self.access = access;
+      changed = true;
+    }
+
+    changed
   }
 
   fn from_field_info(fi: &FieldInfo, preceding_path: &str) -> Self {
@@ -105,33 +135,6 @@ impl FieldSpec {
     }
 
     self.offset = offset
-  }
-
-  pub fn inherit_from(&mut self, fs: &FieldSpec) -> bool {
-    let mut changed = false;
-
-    if self.description.is_none() && fs.description.is_some() {
-      self.description = fs.description.clone();
-      changed = true;
-    }
-
-    if self.access.is_none() && fs.access.is_some() {
-      self.access = fs.access;
-      changed = true
-    }
-
-    changed
-  }
-
-  pub fn propagate_default_register_properties(&mut self, access: Option<AccessSpec>) -> bool {
-    let mut changed = false;
-
-    if self.access.is_none() && access.is_some() {
-      self.access = access;
-      changed = true;
-    }
-
-    changed
   }
 }
 

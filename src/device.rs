@@ -1,5 +1,5 @@
 use super::{peripheral::PeripheralSpec, AccessSpec, ClusterSpec, FieldSpec, RegisterSpec};
-use crate::error::{Result, SvdExpanderError};
+use crate::error::{SvdExpanderError, SvdExpanderResult};
 use svd_parser::{Cpu, Device, Endian};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,7 +10,7 @@ pub enum EndianSpec {
   Other,
 }
 impl EndianSpec {
-  pub fn new(e: &Endian) -> Self {
+  pub(crate) fn new(e: &Endian) -> Self {
     match e {
       Endian::Little => EndianSpec::Little,
       Endian::Big => EndianSpec::Big,
@@ -31,7 +31,7 @@ pub struct CpuSpec {
   pub has_vendor_systick: bool,
 }
 impl CpuSpec {
-  pub fn new(c: &Cpu) -> Self {
+  pub(crate) fn new(c: &Cpu) -> Self {
     Self {
       name: c.name.clone(),
       revision: c.revision.clone(),
@@ -59,11 +59,11 @@ pub struct DeviceSpec {
   pub default_register_access: Option<AccessSpec>,
 }
 impl DeviceSpec {
-  pub fn from_xml(xml: &str) -> Result<Self> {
+  pub fn from_xml(xml: &str) -> SvdExpanderResult<Self> {
     Ok(Self::new(&svd_parser::parse(xml)?)?)
   }
 
-  pub fn new(d: &Device) -> Result<Self> {
+  pub(crate) fn new(d: &Device) -> SvdExpanderResult<Self> {
     let mut device = Self {
       name: d.name.clone(),
       version: d.version.clone(),
@@ -78,7 +78,7 @@ impl DeviceSpec {
         .peripherals
         .iter()
         .map(|p| PeripheralSpec::new(p))
-        .collect::<Result<Vec<PeripheralSpec>>>()?,
+        .collect::<SvdExpanderResult<Vec<PeripheralSpec>>>()?,
       default_register_reset_value: d.default_register_properties.reset_value,
       default_register_reset_mask: d.default_register_properties.reset_mask,
       default_register_size: d.default_register_properties.size,
@@ -95,19 +95,19 @@ impl DeviceSpec {
     Ok(device)
   }
 
-  fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
+  pub fn iter_clusters(&self) -> impl Iterator<Item = &ClusterSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_clusters())
   }
 
-  fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
+  pub fn iter_registers(&self) -> impl Iterator<Item = &RegisterSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_registers())
   }
 
-  fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
+  pub fn iter_fields(&self) -> impl Iterator<Item = &FieldSpec> {
     self.peripherals.iter().flat_map(|p| p.iter_fields())
   }
 
-  fn get_peripheral(&self, path: &str) -> Result<&PeripheralSpec> {
+  pub fn get_peripheral(&self, path: &str) -> SvdExpanderResult<&PeripheralSpec> {
     match self.peripherals.iter().find(|p| p.path() == path) {
       Some(p) => Ok(p),
       None => Err(SvdExpanderError::new(&format!(
@@ -117,7 +117,7 @@ impl DeviceSpec {
     }
   }
 
-  fn get_cluster(&self, path: &str) -> Result<&ClusterSpec> {
+  pub fn get_cluster(&self, path: &str) -> SvdExpanderResult<&ClusterSpec> {
     match self.iter_clusters().find(|c| c.path() == path) {
       Some(c) => Ok(c),
       None => Err(SvdExpanderError::new(&format!(
@@ -127,7 +127,7 @@ impl DeviceSpec {
     }
   }
 
-  fn get_register(&self, path: &str) -> Result<&RegisterSpec> {
+  pub fn get_register(&self, path: &str) -> SvdExpanderResult<&RegisterSpec> {
     match self.iter_registers().find(|r| r.path() == path) {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
@@ -137,7 +137,7 @@ impl DeviceSpec {
     }
   }
 
-  fn get_field(&self, path: &str) -> Result<&FieldSpec> {
+  pub fn get_field(&self, path: &str) -> SvdExpanderResult<&FieldSpec> {
     match self.iter_fields().find(|f| f.path() == path) {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
@@ -147,7 +147,7 @@ impl DeviceSpec {
     }
   }
 
-  fn expand_inherited(&mut self) -> Result<bool> {
+  fn expand_inherited(&mut self) -> SvdExpanderResult<bool> {
     let reference_device = self.clone();
 
     let mut changed = false;

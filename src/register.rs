@@ -2,7 +2,7 @@ use svd_parser::{Register, RegisterInfo};
 
 use super::field::FieldSpec;
 use super::AccessSpec;
-use crate::error::{Result, SvdExpanderError};
+use crate::error::{SvdExpanderError, SvdExpanderResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegisterSpec {
@@ -18,7 +18,7 @@ pub struct RegisterSpec {
   pub fields: Vec<FieldSpec>,
 }
 impl RegisterSpec {
-  pub fn new(r: &Register, preceding_path: &str) -> Result<Vec<Self>> {
+  pub(crate) fn new(r: &Register, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match r {
       Register::Single(ref ri) => vec![Self::from_register_info(ri, preceding_path)?],
       Register::Array(ref fi, ref d) => {
@@ -56,7 +56,21 @@ impl RegisterSpec {
     Ok(specs)
   }
 
-  pub fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub fn derived_from_path(&self) -> Option<String> {
+    match self.derived_from {
+      Some(ref df) => match df.contains(".") {
+        true => Some(df.clone()),
+        false => Some(format!("{}.{}", self.preceding_path, df)),
+      },
+      None => None,
+    }
+  }
+
+  pub fn path(&self) -> String {
+    format!("{}.{}", self.preceding_path, self.name)
+  }
+
+  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
     Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
@@ -75,83 +89,7 @@ impl RegisterSpec {
     }
   }
 
-  pub fn mutate_fields<F>(&mut self, f: F) -> Result<bool>
-  where
-    F: Fn(&mut FieldSpec) -> Result<bool>,
-    F: Copy,
-  {
-    let mut changed = false;
-
-    for field in self.fields.iter_mut() {
-      if f(field)? {
-        changed = true
-      }
-    }
-
-    Ok(changed)
-  }
-
-  pub fn derived_from_path(&self) -> Option<String> {
-    match self.derived_from {
-      Some(ref df) => match df.contains(".") {
-        true => Some(df.clone()),
-        false => Some(format!("{}.{}", self.preceding_path, df)),
-      },
-      None => None,
-    }
-  }
-
-  pub fn path(&self) -> String {
-    format!("{}.{}", self.preceding_path, self.name)
-  }
-
-  fn from_register_info(ri: &RegisterInfo, preceding_path: &str) -> Result<Self> {
-    let mut register = Self {
-      preceding_path: preceding_path.to_owned(),
-      derived_from: ri.derived_from.clone(),
-      name: ri.name.clone(),
-      description: ri.description.clone(),
-      address_offset: ri.address_offset,
-      size: ri.size.clone(),
-      reset_value: ri.reset_value.clone(),
-      reset_mask: ri.reset_mask.clone(),
-      access: match ri.access {
-        Some(ref a) => Some(AccessSpec::new(a)),
-        None => None,
-      },
-      fields: Vec::new(),
-    };
-
-    register.fields = {
-      let mut field_specs: Vec<FieldSpec> = Vec::new();
-
-      if let Some(ref fields) = ri.fields {
-        for f in fields.iter() {
-          field_specs.extend(FieldSpec::new(f, &register.path())?);
-        }
-      }
-
-      field_specs
-    };
-
-    Ok(register)
-  }
-
-  fn interpolate_array_params(&mut self, index: String, address_offset: u32) {
-    self.name = self.name.replace("%s", &index);
-
-    if let Some(df) = self.derived_from.clone() {
-      self.derived_from = Some(df.replace("%s", &index));
-    }
-
-    if let Some(desc) = self.description.clone() {
-      self.description = Some(desc.replace("%s", &index));
-    }
-
-    self.address_offset = address_offset;
-  }
-
-  pub fn inherit_from(&mut self, rs: &RegisterSpec) -> bool {
+  pub(crate) fn inherit_from(&mut self, rs: &RegisterSpec) -> bool {
     let mut changed = false;
 
     if self.description.is_none() && rs.description.is_some() {
@@ -195,7 +133,7 @@ impl RegisterSpec {
     changed
   }
 
-  pub fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_register_properties(
     &mut self,
     size: Option<u32>,
     reset_value: Option<u32>,
@@ -231,6 +169,68 @@ impl RegisterSpec {
     }
 
     changed
+  }
+
+  pub(crate) fn mutate_fields<F>(&mut self, f: F) -> SvdExpanderResult<bool>
+  where
+    F: Fn(&mut FieldSpec) -> SvdExpanderResult<bool>,
+    F: Copy,
+  {
+    let mut changed = false;
+
+    for field in self.fields.iter_mut() {
+      if f(field)? {
+        changed = true
+      }
+    }
+
+    Ok(changed)
+  }
+
+  fn from_register_info(ri: &RegisterInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
+    let mut register = Self {
+      preceding_path: preceding_path.to_owned(),
+      derived_from: ri.derived_from.clone(),
+      name: ri.name.clone(),
+      description: ri.description.clone(),
+      address_offset: ri.address_offset,
+      size: ri.size.clone(),
+      reset_value: ri.reset_value.clone(),
+      reset_mask: ri.reset_mask.clone(),
+      access: match ri.access {
+        Some(ref a) => Some(AccessSpec::new(a)),
+        None => None,
+      },
+      fields: Vec::new(),
+    };
+
+    register.fields = {
+      let mut field_specs: Vec<FieldSpec> = Vec::new();
+
+      if let Some(ref fields) = ri.fields {
+        for f in fields.iter() {
+          field_specs.extend(FieldSpec::new(f, &register.path())?);
+        }
+      }
+
+      field_specs
+    };
+
+    Ok(register)
+  }
+
+  fn interpolate_array_params(&mut self, index: String, address_offset: u32) {
+    self.name = self.name.replace("%s", &index);
+
+    if let Some(df) = self.derived_from.clone() {
+      self.derived_from = Some(df.replace("%s", &index));
+    }
+
+    if let Some(desc) = self.description.clone() {
+      self.description = Some(desc.replace("%s", &index));
+    }
+
+    self.address_offset = address_offset;
   }
 }
 

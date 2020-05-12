@@ -9,7 +9,7 @@ mod register;
 
 pub use cluster::ClusterSpec;
 pub use device::{CpuSpec, DeviceSpec, EndianSpec};
-pub use error::{Result, SvdExpanderError};
+pub use error::{SvdExpanderError, SvdExpanderResult};
 pub use field::FieldSpec;
 pub use peripheral::{AddressBlockSpec, InterruptSpec, PeripheralSpec};
 pub use register::RegisterSpec;
@@ -23,7 +23,7 @@ pub enum AccessSpec {
   WriteOnly,
 }
 impl AccessSpec {
-  pub fn new(access: &Access) -> AccessSpec {
+  pub(crate) fn new(access: &Access) -> AccessSpec {
     match access {
       Access::ReadOnly => AccessSpec::ReadOnly,
       Access::ReadWrite => AccessSpec::ReadWrite,

@@ -1,14 +1,14 @@
 use anyhow::Error as AnyhowError;
 use std::{error::Error, fmt};
 
-pub type Result<T> = std::result::Result<T, SvdExpanderError>;
+pub type SvdExpanderResult<T> = std::result::Result<T, SvdExpanderError>;
 
 #[derive(Debug)]
 pub struct SvdExpanderError {
-  details: String,
+  pub details: String,
 }
 impl SvdExpanderError {
-  pub fn new(msg: &str) -> SvdExpanderError {
+  pub(crate) fn new(msg: &str) -> SvdExpanderError {
     Self {
       details: msg.to_string(),
     }

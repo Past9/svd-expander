@@ -17,6 +17,6 @@ fn main() {
         .read_to_string(xml)
         .unwrap();
 
-    println!("{:#?}", DeviceSpec::from_xml(xml));
+    println!("{:#?}", DeviceSpec::from_xml(xml).unwrap());
 }
 ```

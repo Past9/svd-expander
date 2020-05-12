@@ -2,7 +2,7 @@ use svd_parser::{Cluster, ClusterInfo, RegisterCluster};
 
 use super::register::RegisterSpec;
 use super::{AccessSpec, FieldSpec};
-use crate::error::{Result, SvdExpanderError};
+use crate::error::{SvdExpanderError, SvdExpanderResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClusterSpec {
@@ -19,7 +19,7 @@ pub struct ClusterSpec {
   pub clusters: Vec<ClusterSpec>,
 }
 impl ClusterSpec {
-  pub fn new(c: &Cluster, preceding_path: &str) -> Result<Vec<Self>> {
+  pub(crate) fn new(c: &Cluster, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match c {
       Cluster::Single(ref ci) => vec![Self::from_cluster_info(ci, preceding_path)],
       Cluster::Array(ref ci, ref d) => {
@@ -57,7 +57,45 @@ impl ClusterSpec {
     Ok(specs)
   }
 
-  pub fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub fn derived_from_path(&self) -> Option<String> {
+    match self.derived_from {
+      Some(ref df) => match df.contains(".") {
+        true => Some(df.clone()),
+        false => Some(format!("{}.{}", self.preceding_path, df)),
+      },
+      None => None,
+    }
+  }
+
+  pub fn path(&self) -> String {
+    format!("{}.{}", self.preceding_path, self.name)
+  }
+
+  pub fn iter_clusters<'a>(&'a self) -> Box<dyn Iterator<Item = &ClusterSpec> + 'a> {
+    Box::new(
+      self
+        .clusters
+        .iter()
+        .flat_map(|c| c.iter_clusters())
+        .chain(vec![self]),
+    )
+  }
+
+  pub fn iter_registers<'a>(&'a self) -> Box<dyn Iterator<Item = &RegisterSpec> + 'a> {
+    Box::new(
+      self
+        .clusters
+        .iter()
+        .flat_map(|c| c.iter_registers())
+        .chain(self.registers.iter()),
+    )
+  }
+
+  pub fn iter_fields<'a>(&'a self) -> Box<dyn Iterator<Item = &FieldSpec> + 'a> {
+    Box::new(self.iter_registers().flat_map(|r| r.fields.iter()))
+  }
+
+  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
     Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
@@ -81,9 +119,9 @@ impl ClusterSpec {
     }
   }
 
-  pub fn mutate_clusters<F>(&mut self, f: F) -> Result<bool>
+  pub(crate) fn mutate_clusters<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut ClusterSpec) -> Result<bool>,
+    F: Fn(&mut ClusterSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -101,19 +139,9 @@ impl ClusterSpec {
     Ok(changed)
   }
 
-  pub fn iter_clusters<'a>(&'a self) -> Box<dyn Iterator<Item = &ClusterSpec> + 'a> {
-    Box::new(
-      self
-        .clusters
-        .iter()
-        .flat_map(|c| c.iter_clusters())
-        .chain(vec![self]),
-    )
-  }
-
-  pub fn mutate_registers<F>(&mut self, f: F) -> Result<bool>
+  pub(crate) fn mutate_registers<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut RegisterSpec) -> Result<bool>,
+    F: Fn(&mut RegisterSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -133,23 +161,9 @@ impl ClusterSpec {
     Ok(changed)
   }
 
-  pub fn iter_registers<'a>(&'a self) -> Box<dyn Iterator<Item = &RegisterSpec> + 'a> {
-    Box::new(
-      self
-        .clusters
-        .iter()
-        .flat_map(|c| c.iter_registers())
-        .chain(self.registers.iter()),
-    )
-  }
-
-  pub fn iter_fields<'a>(&'a self) -> Box<dyn Iterator<Item = &FieldSpec> + 'a> {
-    Box::new(self.iter_registers().flat_map(|r| r.fields.iter()))
-  }
-
-  pub fn mutate_fields<F>(&mut self, f: F) -> Result<bool>
+  pub(crate) fn mutate_fields<F>(&mut self, f: F) -> SvdExpanderResult<bool>
   where
-    F: Fn(&mut FieldSpec) -> Result<bool>,
+    F: Fn(&mut FieldSpec) -> SvdExpanderResult<bool>,
     F: Copy,
   {
     let mut changed = false;
@@ -169,78 +183,7 @@ impl ClusterSpec {
     Ok(changed)
   }
 
-  pub fn derived_from_path(&self) -> Option<String> {
-    match self.derived_from {
-      Some(ref df) => match df.contains(".") {
-        true => Some(df.clone()),
-        false => Some(format!("{}.{}", self.preceding_path, df)),
-      },
-      None => None,
-    }
-  }
-
-  pub fn path(&self) -> String {
-    format!("{}.{}", self.preceding_path, self.name)
-  }
-
-  fn from_cluster_info(ci: &ClusterInfo, preceding_path: &str) -> Self {
-    let mut cluster = Self {
-      preceding_path: preceding_path.to_owned(),
-      derived_from: ci.derived_from.clone(),
-      name: ci.name.clone(),
-      description: ci.description.clone(),
-      address_offset: ci.address_offset,
-      default_register_size: ci.default_register_properties.size.clone(),
-      default_register_reset_value: ci.default_register_properties.reset_value.clone(),
-      default_register_reset_mask: ci.default_register_properties.reset_mask.clone(),
-      default_register_access: match ci.default_register_properties.access {
-        Some(ref a) => Some(AccessSpec::new(a)),
-        None => None,
-      },
-      registers: Vec::with_capacity(0),
-      clusters: Vec::with_capacity(0),
-    };
-
-    cluster.registers = ci
-      .children
-      .iter()
-      .filter_map(|child| match child {
-        RegisterCluster::Register(ref r) => Some(RegisterSpec::new(r, &cluster.path())),
-        RegisterCluster::Cluster(_) => None,
-      })
-      .flatten()
-      .flatten()
-      .collect();
-
-    cluster.clusters = ci
-      .children
-      .iter()
-      .filter_map(|child| match child {
-        RegisterCluster::Cluster(ref c) => Some(ClusterSpec::new(c, &cluster.path())),
-        RegisterCluster::Register(_) => None,
-      })
-      .flatten()
-      .flatten()
-      .collect();
-
-    cluster
-  }
-
-  fn interpolate_array_params(&mut self, index: String, address_offset: u32) {
-    self.name = self.name.replace("%s", &index);
-
-    if let Some(df) = self.derived_from.clone() {
-      self.derived_from = Some(df.replace("%s", &index));
-    }
-
-    if let Some(desc) = self.description.clone() {
-      self.description = Some(desc.replace("%s", &index));
-    }
-
-    self.address_offset = address_offset;
-  }
-
-  pub fn inherit_from(&mut self, cs: &ClusterSpec) -> bool {
+  pub(crate) fn inherit_from(&mut self, cs: &ClusterSpec) -> bool {
     let mut changed = false;
 
     if self.description.is_none() && cs.description.is_some() {
@@ -298,7 +241,7 @@ impl ClusterSpec {
     changed
   }
 
-  pub fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_register_properties(
     &mut self,
     size: Option<u32>,
     reset_value: Option<u32>,
@@ -350,6 +293,63 @@ impl ClusterSpec {
     }
 
     changed
+  }
+
+  fn from_cluster_info(ci: &ClusterInfo, preceding_path: &str) -> Self {
+    let mut cluster = Self {
+      preceding_path: preceding_path.to_owned(),
+      derived_from: ci.derived_from.clone(),
+      name: ci.name.clone(),
+      description: ci.description.clone(),
+      address_offset: ci.address_offset,
+      default_register_size: ci.default_register_properties.size.clone(),
+      default_register_reset_value: ci.default_register_properties.reset_value.clone(),
+      default_register_reset_mask: ci.default_register_properties.reset_mask.clone(),
+      default_register_access: match ci.default_register_properties.access {
+        Some(ref a) => Some(AccessSpec::new(a)),
+        None => None,
+      },
+      registers: Vec::with_capacity(0),
+      clusters: Vec::with_capacity(0),
+    };
+
+    cluster.registers = ci
+      .children
+      .iter()
+      .filter_map(|child| match child {
+        RegisterCluster::Register(ref r) => Some(RegisterSpec::new(r, &cluster.path())),
+        RegisterCluster::Cluster(_) => None,
+      })
+      .flatten()
+      .flatten()
+      .collect();
+
+    cluster.clusters = ci
+      .children
+      .iter()
+      .filter_map(|child| match child {
+        RegisterCluster::Cluster(ref c) => Some(ClusterSpec::new(c, &cluster.path())),
+        RegisterCluster::Register(_) => None,
+      })
+      .flatten()
+      .flatten()
+      .collect();
+
+    cluster
+  }
+
+  fn interpolate_array_params(&mut self, index: String, address_offset: u32) {
+    self.name = self.name.replace("%s", &index);
+
+    if let Some(df) = self.derived_from.clone() {
+      self.derived_from = Some(df.replace("%s", &index));
+    }
+
+    if let Some(desc) = self.description.clone() {
+      self.description = Some(desc.replace("%s", &index));
+    }
+
+    self.address_offset = address_offset;
   }
 }
 

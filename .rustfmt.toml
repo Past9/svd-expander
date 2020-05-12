@@ -1,1 +1,7 @@
 tab_spaces = 2
+reorder_impl_items = true
+reorder_imports = true
+reorder_imported_names = true
+reorder_modules = true
+trailing_semicolon = true
+use_field_init_shorthand = true
