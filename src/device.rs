@@ -171,9 +171,17 @@ impl DeviceSpec {
       },
     };
 
+    // Resolve any inheritance chains. Each repetition resolves one level of 
+    // inheritance. We continue until the method returns false, which means
+    // there were no changes and all the chains are fully resolved.
     while device.expand_inherited()? {}
 
+    // Propagate default register properties down to the registers.
     while device.propagate_default_register_properties() {}
+
+    // Propagate register access values down to their fields, if the
+    // fields have not specified their own.
+    device.propagate_field_access()?;
 
     Ok(device)
   }
@@ -329,6 +337,26 @@ impl DeviceSpec {
     }
 
     return changed;
+  }
+
+  fn propagate_field_access(&mut self) -> SvdExpanderResult<()> {
+    for peripheral in self.peripherals.iter_mut() {
+      peripheral.mutate_registers(|r| {
+        if let Some(ref access) = r.access {
+          for field in r.fields.iter_mut() {
+            if field.access.is_none() {
+              field.access = Some(access.clone());
+            }
+          }
+        }
+        // Whether we return true or false is irrelevant. We're not propagating
+        // changes through multiple levels of the tree so it doesn't matter whether 
+        // anything changed or not.
+        Ok(true) 
+      })?;
+    }
+
+    Ok(())
   }
 }
 
