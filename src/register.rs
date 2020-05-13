@@ -39,8 +39,10 @@ pub struct RegisterSpec {
   /// The fields that exist on the register.
   pub fields: Vec<FieldSpec>,
 
+  /// Default write constraints for fields on this register
   pub default_field_write_constraint: Option<WriteConstraintSpec>,
 
+  /// Default modified write values for fields on this register
   pub default_field_modified_write_values: Option<ModifiedWriteValuesSpec>,
 }
 impl RegisterSpec {

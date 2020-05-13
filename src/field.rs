@@ -1,7 +1,10 @@
 use svd_parser::{Field, FieldInfo};
 
 use super::AccessSpec;
-use crate::error::{SvdExpanderError, SvdExpanderResult};
+use crate::{
+  error::{SvdExpanderError, SvdExpanderResult},
+  value::{ModifiedWriteValuesSpec, WriteConstraintSpec},
+};
 
 /// Describes a field on a register.
 #[derive(Debug, Clone, PartialEq)]
@@ -23,6 +26,13 @@ pub struct FieldSpec {
 
   /// The access rights to the field.
   pub access: Option<AccessSpec>,
+
+  /// Constraints for writing values to the field.
+  pub write_constraint: Option<WriteConstraintSpec>,
+
+  /// Describes the manipulation of data written to this field. If `None`, the value written to
+  /// the field is the value stored in the field.
+  pub modified_write_values: Option<ModifiedWriteValuesSpec>,
 }
 impl FieldSpec {
   pub(crate) fn new(f: &Field, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
@@ -85,6 +95,8 @@ impl FieldSpec {
       offset: self.offset,
       width: self.width,
       access: self.access,
+      write_constraint: self.write_constraint.clone(),
+      modified_write_values: self.modified_write_values.clone(),
     }
   }
 
@@ -99,6 +111,16 @@ impl FieldSpec {
     if self.access.is_none() && fs.access.is_some() {
       self.access = fs.access;
       changed = true
+    }
+
+    if self.write_constraint.is_none() && fs.write_constraint.is_some() {
+      self.write_constraint = fs.write_constraint.clone();
+      changed = true;
+    }
+
+    if self.modified_write_values.is_none() && fs.modified_write_values.is_some() {
+      self.modified_write_values = fs.modified_write_values.clone();
+      changed = true;
     }
 
     changed
@@ -130,6 +152,14 @@ impl FieldSpec {
         Some(ref a) => Some(AccessSpec::new(a)),
         None => None,
       },
+      write_constraint: match fi.write_constraint {
+        Some(ref wc) => Some(WriteConstraintSpec::new(wc)),
+        None => None,
+      },
+      modified_write_values: match fi.modified_write_values {
+        Some(ref mwv) => Some(ModifiedWriteValuesSpec::new(mwv)),
+        None => None,
+      },
     }
   }
 
@@ -151,6 +181,7 @@ impl FieldSpec {
 #[cfg(test)]
 mod tests {
   use super::{AccessSpec, FieldSpec};
+  use crate::value::{ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec};
   use svd_parser::parse::Parse;
   use svd_parser::Field;
   use xmltree::Element;
@@ -165,6 +196,13 @@ mod tests {
         <bitOffset>2</bitOffset>
         <bitWidth>1</bitWidth>
         <access>write-only</access>
+        <writeConstraint>
+          <range>
+            <minimum>2</minimum>
+            <maximum>4</maximum>
+          </range>
+        </writeConstraint>
+        <modifiedWriteValues>zeroToToggle</modifiedWriteValues>
       </field>
       "##
         .as_bytes(),
@@ -184,6 +222,14 @@ mod tests {
     assert_eq!(1, fs.width);
     assert_eq!(2, fs.offset);
     assert_eq!(AccessSpec::WriteOnly, fs.access.unwrap());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      fs.write_constraint.unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::ZeroToToggle,
+      fs.modified_write_values.unwrap()
+    );
   }
 
   #[test]
@@ -262,6 +308,13 @@ mod tests {
         <bitOffset>3</bitOffset>
         <bitWidth>4</bitWidth>
         <access>read-only</access>
+        <writeConstraint>
+          <range>
+            <minimum>2</minimum>
+            <maximum>4</maximum>
+          </range>
+        </writeConstraint>
+        <modifiedWriteValues>zeroToToggle</modifiedWriteValues>
       </field>
     "##
         .as_bytes(),
@@ -280,6 +333,14 @@ mod tests {
     assert_eq!("FOO", descendant_fs.name);
     assert_eq!(2, descendant_fs.width);
     assert_eq!(1, descendant_fs.offset);
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      descendant_fs.write_constraint.unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::ZeroToToggle,
+      descendant_fs.modified_write_values.unwrap()
+    );
 
     // Inherited
     assert_eq!("Baz", descendant_fs.description.unwrap());
