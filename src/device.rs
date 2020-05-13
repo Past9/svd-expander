@@ -410,7 +410,10 @@ impl DeviceSpec {
 mod tests {
   use super::{DeviceSpec, EndianSpec};
   use crate::{
-    value::{ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec, EnumeratedValueValueSpec},
+    value::{
+      EnumeratedValueValueSpec, ModifiedWriteValuesSpec, WriteConstraintRangeSpec,
+      WriteConstraintSpec,
+    },
     AccessSpec,
   };
   use svd_parser::{parse::Parse, Device};

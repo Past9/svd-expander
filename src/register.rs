@@ -92,7 +92,7 @@ impl RegisterSpec {
     }
   }
 
-  /// The full path this register.
+  /// The full path to this register.
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }

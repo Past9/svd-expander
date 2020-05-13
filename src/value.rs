@@ -4,16 +4,35 @@ use svd_parser::{
   Usage, WriteConstraint,
 };
 
+/// Describes the manipulation of data written to a field. If not specified, the values written to
+/// the field is the value stored in the field.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModifiedWriteValuesSpec {
+  /// Write data bit of one shall clear (set to zero) the corresponding bit in the field.
   OneToClear,
+
+  /// Write data bit of one shall set (set to one) the corresponding bit in the field.
   OneToSet,
+
+  /// Write data bit of one shall toggle (invert) the corresponding bit in the field.
   OneToToggle,
+
+  /// Write data bit of zero shall clear (set to zero) the corresponding bit in the field.
   ZeroToClear,
+
+  /// Write data bit of zero shall set (set to one) the corresponding bit in the field.
   ZeroToSet,
+
+  /// Write data bit of zero shall toggle (invert) the corresponding bit in the field.
   ZeroToToggle,
+
+  /// After a write operation, all the bits in the field are cleared (set to zero).
   Clear,
+
+  /// After a write operation, all the bits in the field are set (set to one).
   Set,
+
+  /// After a write operation, all the bits in the field may be modified (default).
   Modify,
 }
 impl ModifiedWriteValuesSpec {
@@ -34,11 +53,29 @@ impl ModifiedWriteValuesSpec {
   }
 }
 
+/// Defines constraints for writing values to a field.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WriteConstraintSpec {
+  /// Only the values in the enumerated values list(s) of the field may be written.
   UseEnumeratedValues,
+
+  /// Only integers within the bounds of the range (inclusive) may be written.
   Range(WriteConstraintRangeSpec),
+
+  /// Only the last-read value can be written.
   WriteAsRead,
+
+  /// There are no constraints on writing to the field. This variant is only constructed in cases
+  /// where the SVD XML is illogical, for example like this:
+  ///
+  /// ```xml
+  /// <writeConstraint>
+  ///   <useEnumeratedValues>false</useEnumeratedValues>
+  /// </writeConstraint>
+  /// ```
+  ///
+  /// The XML is supposed to contain one of three mutually exclusive options, so it doesn't make
+  /// sense if the option that it contains is set to `false`.
   Unconstrained,
 }
 impl WriteConstraintSpec {
@@ -54,9 +91,14 @@ impl WriteConstraintSpec {
   }
 }
 
+/// A range of values that can be written to a field. Writable values are integers that fall within
+/// the `min` and `max` bounds (inclusive).
 #[derive(Debug, Clone, PartialEq)]
 pub struct WriteConstraintRangeSpec {
+  /// Lowest value that can be written to a field.
   pub min: u32,
+
+  /// Highest value that can be written to a field.
   pub max: u32,
 }
 impl WriteConstraintRangeSpec {
@@ -68,10 +110,16 @@ impl WriteConstraintRangeSpec {
   }
 }
 
+/// Defines whether an enumerated value may be read from a field, written to a field, or both.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnumeratedValueUsageSpec {
+  /// The enumerated value may be read from the field, but not written to it.
   Read,
+
+  /// The enumerated value may be written to the field, but not read from it.
   Write,
+
+  /// The enumerated value may be both written to the field and read from it.
   ReadWrite,
 }
 impl EnumeratedValueUsageSpec {
@@ -84,12 +132,19 @@ impl EnumeratedValueUsageSpec {
   }
 }
 
+/// A set of values that can be written to and/or read from a field.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumeratedValueSetSpec {
   preceding_path: String,
   derived_from: Option<String>,
+
+  /// The name of the set of enumerated values.
   pub name: Option<String>,
+
+  /// Whether the values in this set can be read from the field, written to it, or both.
   pub usage: Option<EnumeratedValueUsageSpec>,
+
+  /// The list of values.
   pub values: Vec<EnumeratedValueSpec>,
 }
 impl EnumeratedValueSetSpec {
@@ -110,6 +165,7 @@ impl EnumeratedValueSetSpec {
     })
   }
 
+  /// The full path to the enumerated value set that this set inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
@@ -120,6 +176,8 @@ impl EnumeratedValueSetSpec {
     }
   }
 
+  /// The full path to this enumerated value set. Will be `None` if this set does not
+  /// have a `name` (`name` is `None`).
   pub fn path(&self) -> Option<String> {
     match self.name {
       Some(ref n) => Some(format!("{}.{}", self.preceding_path, n)),
@@ -160,10 +218,16 @@ impl EnumeratedValueSetSpec {
   }
 }
 
+/// A value that can be written to or read from a field (or both).
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumeratedValueSpec {
+  /// The name of the value. Must be unique within the enumerated value set.
   pub name: String,
+
+  /// A description of the value's meaning.
   pub description: Option<String>,
+
+  /// The actual value to be written and/or read.
   pub value: Option<EnumeratedValueValueSpec>,
 }
 impl EnumeratedValueSpec {
@@ -197,8 +261,13 @@ impl EnumeratedValueSpec {
   }
 }
 
+/// The actual content that can be written to or read from a field as part of
+/// an enumerated value set.
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnumeratedValueValueSpec {
+  /// The bit value to be read or written.
   Value(u32),
+
+  /// This value is a catch-all for any other values that are not explicitly listed.
   Default,
 }
