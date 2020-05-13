@@ -1,4 +1,4 @@
-use crate::{SvdExpanderError, SvdExpanderResult};
+use crate::SvdExpanderResult;
 use svd_parser::{
   writeconstraint::WriteConstraintRange, EnumeratedValue, EnumeratedValues, ModifiedWriteValues,
   Usage, WriteConstraint,
@@ -17,7 +17,7 @@ pub enum ModifiedWriteValuesSpec {
   Modify,
 }
 impl ModifiedWriteValuesSpec {
-  pub fn new(mwv: &ModifiedWriteValues) -> Self {
+  pub(crate) fn new(mwv: &ModifiedWriteValues) -> Self {
     match mwv {
       ModifiedWriteValues::OneToClear => ModifiedWriteValuesSpec::OneToClear,
       ModifiedWriteValues::OneToSet => ModifiedWriteValuesSpec::OneToSet,
@@ -42,7 +42,7 @@ pub enum WriteConstraintSpec {
   Unconstrained,
 }
 impl WriteConstraintSpec {
-  pub fn new(wc: &WriteConstraint) -> Self {
+  pub(crate) fn new(wc: &WriteConstraint) -> Self {
     match wc {
       WriteConstraint::WriteAsRead(true) => WriteConstraintSpec::WriteAsRead,
       WriteConstraint::UseEnumeratedValues(true) => WriteConstraintSpec::UseEnumeratedValues,
@@ -60,7 +60,7 @@ pub struct WriteConstraintRangeSpec {
   pub max: u32,
 }
 impl WriteConstraintRangeSpec {
-  pub fn new(wcr: &WriteConstraintRange) -> Self {
+  pub(crate) fn new(wcr: &WriteConstraintRange) -> Self {
     Self {
       min: wcr.min,
       max: wcr.max,
@@ -75,7 +75,7 @@ pub enum EnumeratedValueUsageSpec {
   ReadWrite,
 }
 impl EnumeratedValueUsageSpec {
-  pub fn new(u: &Usage) -> Self {
+  pub(crate) fn new(u: &Usage) -> Self {
     match u {
       Usage::Read => EnumeratedValueUsageSpec::Read,
       Usage::Write => EnumeratedValueUsageSpec::Write,
@@ -86,14 +86,16 @@ impl EnumeratedValueUsageSpec {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumeratedValueSetSpec {
+  preceding_path: String,
   derived_from: Option<String>,
   pub name: Option<String>,
   pub usage: Option<EnumeratedValueUsageSpec>,
   pub values: Vec<EnumeratedValueSpec>,
 }
 impl EnumeratedValueSetSpec {
-  pub fn new(ev: &EnumeratedValues) -> SvdExpanderResult<Self> {
+  pub(crate) fn new(ev: &EnumeratedValues, preceding_path: &str) -> SvdExpanderResult<Self> {
     Ok(Self {
+      preceding_path: preceding_path.to_owned(),
       derived_from: ev.derived_from.clone(),
       name: ev.name.clone(),
       usage: match ev.usage {
@@ -104,8 +106,57 @@ impl EnumeratedValueSetSpec {
         .values
         .iter()
         .map(|v| EnumeratedValueSpec::new(&v))
-        .collect::<SvdExpanderResult<Vec<EnumeratedValueSpec>>>()?,
+        .collect(),
     })
+  }
+
+  pub fn derived_from_path(&self) -> Option<String> {
+    match self.derived_from {
+      Some(ref df) => match df.contains(".") {
+        true => Some(df.clone()),
+        false => Some(format!("{}.{}", self.preceding_path, df)),
+      },
+      None => None,
+    }
+  }
+
+  pub fn path(&self) -> Option<String> {
+    match self.name {
+      Some(ref n) => Some(format!("{}.{}", self.preceding_path, n)),
+      None => None,
+    }
+  }
+
+  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+    Self {
+      preceding_path: preceding_path.to_owned(),
+      derived_from: None,
+      name: self.name.clone(),
+      usage: self.usage.clone(),
+      values: self.values.clone(),
+    }
+  }
+
+  pub(crate) fn inherit_from(&mut self, ss: &EnumeratedValueSetSpec) -> bool {
+    let mut changed = false;
+
+    if self.usage.is_none() && ss.usage.is_some() {
+      self.usage = ss.usage.clone();
+      changed = true;
+    }
+
+    for ancestor in ss.values.iter() {
+      if let Some(ref mut descendant) = self.values.iter_mut().find(|f| f.name == ancestor.name) {
+        if descendant.inherit_from(ancestor) {
+          changed = true;
+        }
+      } else {
+        self.values.push(ancestor.clone());
+        changed = true;
+      }
+    }
+
+    changed
   }
 }
 
@@ -113,28 +164,36 @@ impl EnumeratedValueSetSpec {
 pub struct EnumeratedValueSpec {
   pub name: String,
   pub description: Option<String>,
-  pub value: EnumeratedValueValueSpec,
+  pub value: Option<EnumeratedValueValueSpec>,
 }
 impl EnumeratedValueSpec {
-  pub fn new(ev: &EnumeratedValue) -> SvdExpanderResult<Self> {
-    Ok(Self {
+  pub(crate) fn new(ev: &EnumeratedValue) -> Self {
+    Self {
       name: ev.name.clone(),
       description: ev.description.clone(),
       value: match (ev.value, ev.is_default) {
-        (Some(v), _) => EnumeratedValueValueSpec::Value(v),
-        (None, Some(true)) => EnumeratedValueValueSpec::Default,
-        (None, None) => {
-          return Err(SvdExpanderError::new(
-            "Can't interpret enumerated value with no value and no is_default tag.",
-          ))
-        }
-        (None, Some(false)) => {
-          return Err(SvdExpanderError::new(
-            "Can't interpret enumerated value with no value where is_default=false.",
-          ))
-        }
+        (Some(v), _) => Some(EnumeratedValueValueSpec::Value(v)),
+        (None, Some(true)) => Some(EnumeratedValueValueSpec::Default),
+        (None, None) => None,
+        (None, Some(false)) => None,
       },
-    })
+    }
+  }
+
+  pub(crate) fn inherit_from(&mut self, vs: &EnumeratedValueSpec) -> bool {
+    let mut changed = false;
+
+    if self.description.is_none() && vs.description.is_some() {
+      self.description = vs.description.clone();
+      changed = true;
+    }
+
+    if self.value.is_none() && vs.value.is_some() {
+      self.value = vs.value.clone();
+      changed = true;
+    }
+
+    changed
   }
 }
 

@@ -3,7 +3,7 @@ use svd_parser::{Field, FieldInfo};
 use super::AccessSpec;
 use crate::{
   error::{SvdExpanderError, SvdExpanderResult},
-  value::{ModifiedWriteValuesSpec, WriteConstraintSpec},
+  value::{EnumeratedValueSetSpec, ModifiedWriteValuesSpec, WriteConstraintSpec},
 };
 
 /// Describes a field on a register.
@@ -33,11 +33,13 @@ pub struct FieldSpec {
   /// Describes the manipulation of data written to this field. If `None`, the value written to
   /// the field is the value stored in the field.
   pub modified_write_values: Option<ModifiedWriteValuesSpec>,
+
+  pub enumerated_value_sets: Vec<EnumeratedValueSetSpec>,
 }
 impl FieldSpec {
   pub(crate) fn new(f: &Field, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match f {
-      Field::Single(ref fi) => vec![Self::from_field_info(fi, preceding_path)],
+      Field::Single(ref fi) => vec![Self::from_field_info(fi, preceding_path)?],
       Field::Array(ref fi, ref d) => {
         let dim_indices = if let Some(ref di) = d.dim_index {
           if d.dim != di.len() as u32 {
@@ -51,7 +53,7 @@ impl FieldSpec {
           (0..d.dim).map(|v| v.to_string()).collect()
         };
 
-        let prototype = Self::from_field_info(fi, preceding_path);
+        let prototype = Self::from_field_info(fi, preceding_path)?;
         let mut field_specs = Vec::with_capacity(d.dim as usize);
 
         for (n, dim_index) in dim_indices.iter().enumerate() {
@@ -87,7 +89,7 @@ impl FieldSpec {
   }
 
   pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
-    Self {
+    let mut field = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
       name: self.name.clone(),
@@ -97,7 +99,16 @@ impl FieldSpec {
       access: self.access,
       write_constraint: self.write_constraint.clone(),
       modified_write_values: self.modified_write_values.clone(),
-    }
+      enumerated_value_sets: Vec::new(),
+    };
+
+    field.enumerated_value_sets = self
+      .enumerated_value_sets
+      .iter()
+      .map(|f| f.clone_with_preceding_path(&field.path()))
+      .collect();
+
+    field
   }
 
   pub(crate) fn inherit_from(&mut self, fs: &FieldSpec) -> bool {
@@ -152,8 +163,24 @@ impl FieldSpec {
     changed
   }
 
-  fn from_field_info(fi: &FieldInfo, preceding_path: &str) -> Self {
-    Self {
+  pub(crate) fn mutate_enumerate_value_sets<F>(&mut self, f: F) -> SvdExpanderResult<bool>
+  where
+    F: Fn(&mut EnumeratedValueSetSpec) -> SvdExpanderResult<bool>,
+    F: Copy,
+  {
+    let mut changed = false;
+
+    for set in self.enumerated_value_sets.iter_mut() {
+      if f(set)? {
+        changed = true
+      }
+    }
+
+    Ok(changed)
+  }
+
+  fn from_field_info(fi: &FieldInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
+    let mut field = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: fi.derived_from.clone(),
       name: fi.name.clone(),
@@ -172,7 +199,16 @@ impl FieldSpec {
         Some(ref mwv) => Some(ModifiedWriteValuesSpec::new(mwv)),
         None => None,
       },
-    }
+      enumerated_value_sets: Vec::new(),
+    };
+
+    field.enumerated_value_sets = fi
+      .enumerated_values
+      .iter()
+      .map(|v| EnumeratedValueSetSpec::new(v, &field.path()))
+      .collect::<SvdExpanderResult<Vec<EnumeratedValueSetSpec>>>()?;
+
+    Ok(field)
   }
 
   fn interpolate_array_params(&mut self, index: String, offset: u32) {

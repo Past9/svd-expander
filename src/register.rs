@@ -4,7 +4,7 @@ use super::field::FieldSpec;
 use super::AccessSpec;
 use crate::{
   error::{SvdExpanderError, SvdExpanderResult},
-  value::{ModifiedWriteValuesSpec, WriteConstraintSpec},
+  value::{EnumeratedValueSetSpec, ModifiedWriteValuesSpec, WriteConstraintSpec},
 };
 
 /// Describes a register. Registers may be top-level constructs of a peripheral or may be nested
@@ -95,6 +95,18 @@ impl RegisterSpec {
   /// The full path this register.
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
+  }
+
+  /// Iterates all the enumerated value sets on all the fields in this register.
+  pub fn iter_enumerated_value_sets<'a>(
+    &'a self,
+  ) -> Box<dyn Iterator<Item = &EnumeratedValueSetSpec> + 'a> {
+    Box::new(
+      self
+        .fields
+        .iter()
+        .flat_map(|f| f.enumerated_value_sets.iter()),
+    )
   }
 
   pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
@@ -231,6 +243,22 @@ impl RegisterSpec {
     for field in self.fields.iter_mut() {
       if f(field)? {
         changed = true
+      }
+    }
+
+    Ok(changed)
+  }
+
+  pub(crate) fn mutate_enumerated_value_sets<F>(&mut self, f: F) -> SvdExpanderResult<bool>
+  where
+    F: Fn(&mut EnumeratedValueSetSpec) -> SvdExpanderResult<bool>,
+    F: Copy,
+  {
+    let mut changed = false;
+
+    for field in &mut self.fields.iter_mut() {
+      if field.mutate_enumerate_value_sets(f)? {
+        changed = true;
       }
     }
 
