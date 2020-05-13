@@ -1,8 +1,8 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::{error::SvdExpanderResult};
+use crate::error::SvdExpanderResult;
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
-/// Describes an address range uniquely mapped to a peripheral. 
+/// Describes an address range uniquely mapped to a peripheral.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AddressBlockSpec {
   /// The start address of the address block relative to the peripheral's base address.
@@ -76,7 +76,7 @@ pub struct PeripheralSpec {
   pub display_name: Option<String>,
 
   /// Name of the group to which this peripheral belongs. This is optional and is mostly
-  /// intended to visually group the peripheral with related peripherals in documentation 
+  /// intended to visually group the peripheral with related peripherals in documentation
   /// and user interfaces.
   pub group_name: Option<String>,
 
@@ -86,7 +86,7 @@ pub struct PeripheralSpec {
   /// Lowest address reserved or used by the peripheral.
   pub base_address: u32,
 
-  /// An address range uniquely mapped to this peripheral. 
+  /// An address range uniquely mapped to this peripheral.
   pub address_block: Option<AddressBlockSpec>,
 
   /// Default bit-width of any register contained in this peripheral.
@@ -142,13 +142,13 @@ impl PeripheralSpec {
         let mut registers = Vec::new();
         for register in register_clusters.iter().filter_map(|rc| match rc {
           RegisterCluster::Register(ref r) => Some(r),
-          RegisterCluster::Cluster(_) => None
+          RegisterCluster::Cluster(_) => None,
         }) {
           registers.extend(RegisterSpec::new(register, &peripheral.name)?);
         }
         registers
-      },
-      None => Vec::new()
+      }
+      None => Vec::new(),
     };
 
     peripheral.clusters = match p.registers {
@@ -156,13 +156,13 @@ impl PeripheralSpec {
         let mut clusters = Vec::new();
         for cluster in register_clusters.iter().filter_map(|rc| match rc {
           RegisterCluster::Cluster(ref c) => Some(c),
-          RegisterCluster::Register(_) => None
+          RegisterCluster::Register(_) => None,
         }) {
           clusters.extend(ClusterSpec::new(cluster, &peripheral.name)?);
         }
         clusters
-      },
-      None => Vec::new()
+      }
+      None => Vec::new(),
     };
 
     Ok(peripheral)
@@ -199,7 +199,7 @@ impl PeripheralSpec {
   }
 
   /// The full path of this peripheral. Since all peripherals are top-level components of the
-  /// device, this is just the name of the peripheral. 
+  /// device, this is just the name of the peripheral.
   pub fn path(&self) -> String {
     self.name.clone()
   }
@@ -318,7 +318,7 @@ impl PeripheralSpec {
         if descendant.inherit_from(ancestor) {
           changed = true;
         }
-      } 
+      }
     }
 
     for ancestor in ps.registers.iter() {
@@ -353,50 +353,50 @@ impl PeripheralSpec {
 
   pub(crate) fn propagate_default_register_properties(
     &mut self,
-    size: Option<u32>,
-    reset_value: Option<u32>,
-    reset_mask: Option<u32>,
-    access: Option<AccessSpec>,
+    size: &Option<u32>,
+    reset_value: &Option<u32>,
+    reset_mask: &Option<u32>,
+    access: &Option<AccessSpec>,
   ) -> bool {
     let mut changed = false;
 
     if self.default_register_size.is_none() && size.is_some() {
-      self.default_register_size = size;
+      self.default_register_size = size.clone();
       changed = true;
     }
 
     if self.default_register_reset_value.is_none() && reset_value.is_some() {
-      self.default_register_reset_value = reset_value;
+      self.default_register_reset_value = reset_value.clone();
       changed = true;
     }
 
     if self.default_register_reset_mask.is_none() && reset_mask.is_some() {
-      self.default_register_reset_mask = reset_mask;
+      self.default_register_reset_mask = reset_mask.clone();
       changed = true;
     }
 
     if self.default_register_access.is_none() && access.is_some() {
-      self.default_register_access = access;
+      self.default_register_access = access.clone();
       changed = true;
     }
 
     for cluster in self.clusters.iter_mut() {
       if cluster.propagate_default_register_properties(
-        self.default_register_size,
-        self.default_register_reset_value,
-        self.default_register_reset_mask,
-        self.default_register_access,
+        &self.default_register_size,
+        &self.default_register_reset_value,
+        &self.default_register_reset_mask,
+        &self.default_register_access,
       ) {
         changed = true;
       }
     }
 
     for register in self.registers.iter_mut() {
-      if register.propagate_default_register_properties(
-        self.default_register_size,
-        self.default_register_reset_value,
-        self.default_register_reset_mask,
-        self.default_register_access,
+      if register.propagate_default_properties(
+        &self.default_register_size,
+        &self.default_register_reset_value,
+        &self.default_register_reset_mask,
+        &self.default_register_access,
       ) {
         changed = true;
       }
@@ -1438,10 +1438,10 @@ mod tests {
     let mut peripheral = PeripheralSpec::new(&pi).unwrap();
 
     let changed = peripheral.propagate_default_register_properties(
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(AccessSpec::ReadWriteOnce),
+      &Some(1),
+      &Some(2),
+      &Some(3),
+      &Some(AccessSpec::ReadWriteOnce),
     );
 
     assert!(changed);
@@ -1470,7 +1470,7 @@ mod tests {
     let pi = Peripheral::parse(&el).unwrap();
     let mut peripheral = PeripheralSpec::new(&pi).unwrap();
 
-    let changed = peripheral.propagate_default_register_properties(None, None, None, None);
+    let changed = peripheral.propagate_default_register_properties(&None, &None, &None, &None);
 
     assert!(!changed);
     assert!(peripheral.default_register_access.is_none());

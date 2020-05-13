@@ -2,9 +2,12 @@ use svd_parser::{Register, RegisterInfo};
 
 use super::field::FieldSpec;
 use super::AccessSpec;
-use crate::error::{SvdExpanderError, SvdExpanderResult};
+use crate::{
+  error::{SvdExpanderError, SvdExpanderResult},
+  value::{ModifiedWriteValuesSpec, WriteConstraintSpec},
+};
 
-/// Describes a register. Registers may be top-level constructs of a peripheral or may be nested 
+/// Describes a register. Registers may be top-level constructs of a peripheral or may be nested
 /// within register clusters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegisterSpec {
@@ -35,6 +38,12 @@ pub struct RegisterSpec {
 
   /// The fields that exist on the register.
   pub fields: Vec<FieldSpec>,
+
+  /// Default write constraints for fields on this register
+  pub default_field_write_constraint: Option<WriteConstraintSpec>,
+
+  /// Default modified write values for fields on this register
+  pub default_field_modified_write_values: Option<ModifiedWriteValuesSpec>,
 }
 impl RegisterSpec {
   pub(crate) fn new(r: &Register, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
@@ -71,6 +80,7 @@ impl RegisterSpec {
 
     Ok(specs)
   }
+
   /// The full path to the register that this register inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
@@ -99,13 +109,15 @@ impl RegisterSpec {
       reset_mask: self.reset_mask,
       access: self.access,
       fields: Vec::new(),
+      default_field_write_constraint: self.default_field_write_constraint.clone(),
+      default_field_modified_write_values: self.default_field_modified_write_values.clone(),
     };
 
     register.fields = self
-        .fields
-        .iter()
-        .map(|f| f.clone_with_preceding_path(&register.path()))
-        .collect();
+      .fields
+      .iter()
+      .map(|f| f.clone_with_preceding_path(&register.path()))
+      .collect();
 
     register
   }
@@ -138,6 +150,19 @@ impl RegisterSpec {
       changed = true;
     }
 
+    if self.default_field_write_constraint.is_none() && rs.default_field_write_constraint.is_some()
+    {
+      self.default_field_write_constraint = rs.default_field_write_constraint.clone();
+      changed = true;
+    }
+
+    if self.default_field_modified_write_values.is_none()
+      && rs.default_field_modified_write_values.is_some()
+    {
+      self.default_field_modified_write_values = rs.default_field_modified_write_values.clone();
+      changed = true;
+    }
+
     for ancestor in rs.fields.iter() {
       if let Some(ref mut descendant) = self.fields.iter_mut().find(|f| f.name == ancestor.name) {
         if descendant.inherit_from(ancestor) {
@@ -154,37 +179,41 @@ impl RegisterSpec {
     changed
   }
 
-  pub(crate) fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_properties(
     &mut self,
-    size: Option<u32>,
-    reset_value: Option<u32>,
-    reset_mask: Option<u32>,
-    access: Option<AccessSpec>,
+    size: &Option<u32>,
+    reset_value: &Option<u32>,
+    reset_mask: &Option<u32>,
+    access: &Option<AccessSpec>,
   ) -> bool {
     let mut changed = false;
 
     if self.size.is_none() && size.is_some() {
-      self.size = size;
+      self.size = size.clone();
       changed = true;
     }
 
     if self.reset_value.is_none() && reset_value.is_some() {
-      self.reset_value = reset_value;
+      self.reset_value = reset_value.clone();
       changed = true;
     }
 
     if self.reset_mask.is_none() && reset_mask.is_some() {
-      self.reset_mask = reset_mask;
+      self.reset_mask = reset_mask.clone();
       changed = true;
     }
 
     if self.access.is_none() && access.is_some() {
-      self.access = access;
+      self.access = access.clone();
       changed = true;
     }
 
     for field in self.fields.iter_mut() {
-      if field.propagate_default_register_properties(self.access) {
+      if field.propagate_default_properties(
+        &self.access,
+        &self.default_field_write_constraint,
+        &self.default_field_modified_write_values,
+      ) {
         changed = true;
       }
     }
@@ -223,6 +252,14 @@ impl RegisterSpec {
         None => None,
       },
       fields: Vec::new(),
+      default_field_write_constraint: match ri.write_constraint {
+        Some(ref wc) => Some(WriteConstraintSpec::new(wc)),
+        None => None,
+      },
+      default_field_modified_write_values: match ri.modified_write_values {
+        Some(ref mwv) => Some(ModifiedWriteValuesSpec::new(mwv)),
+        None => None,
+      },
     };
 
     register.fields = {
@@ -258,6 +295,7 @@ impl RegisterSpec {
 #[cfg(test)]
 mod tests {
   use super::{AccessSpec, RegisterSpec};
+  use crate::value::{ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec};
   use std::cell::RefCell;
   use svd_parser::parse::Parse;
   use svd_parser::Register;
@@ -275,6 +313,13 @@ mod tests {
         <resetValue>1234</resetValue>
         <resetMask>4321</resetMask>
         <size>16</size>
+        <writeConstraint>
+          <range>
+            <minimum>2</minimum>
+            <maximum>4</maximum>
+          </range>
+        </writeConstraint>
+        <modifiedWriteValues>zeroToToggle</modifiedWriteValues>
         <fields>
           <field>
             <name>F1</name>
@@ -308,6 +353,14 @@ mod tests {
     assert_eq!(1234, rs.reset_value.unwrap());
     assert_eq!(4321, rs.reset_mask.unwrap());
     assert_eq!(16, rs.size.unwrap());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      rs.default_field_write_constraint.unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::ZeroToToggle,
+      rs.default_field_modified_write_values.unwrap()
+    );
 
     assert_eq!(2, rs.fields.len());
     assert_eq!("F1", rs.fields[0].name);
@@ -441,6 +494,13 @@ mod tests {
         <resetValue>2345</resetValue>
         <resetMask>5432</resetMask>
         <size>24</size>
+        <writeConstraint>
+          <range>
+            <minimum>2</minimum>
+            <maximum>4</maximum>
+          </range>
+        </writeConstraint>
+        <modifiedWriteValues>zeroToToggle</modifiedWriteValues>
         <fields>
           <field>
             <name>F1</name>
@@ -488,6 +548,14 @@ mod tests {
     assert_eq!(2345, descendant_rs.reset_value.unwrap());
     assert_eq!(5432, descendant_rs.reset_mask.unwrap());
     assert_eq!(24, descendant_rs.size.unwrap());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      descendant_rs.default_field_write_constraint.unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::ZeroToToggle,
+      descendant_rs.default_field_modified_write_values.unwrap()
+    );
 
     assert_eq!(4, descendant_rs.fields.len());
 
@@ -848,11 +916,11 @@ mod tests {
     let mut rs = RegisterSpec::new(&ri, "path").unwrap();
     let register = &mut rs[0];
 
-    let changed = register.propagate_default_register_properties(
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(AccessSpec::ReadWriteOnce),
+    let changed = register.propagate_default_properties(
+      &Some(1),
+      &Some(2),
+      &Some(3),
+      &Some(AccessSpec::ReadWriteOnce),
     );
 
     assert!(changed);
@@ -879,7 +947,7 @@ mod tests {
     let mut rs = RegisterSpec::new(&ri, "path").unwrap();
     let register = &mut rs[0];
 
-    let changed = register.propagate_default_register_properties(None, None, None, None);
+    let changed = register.propagate_default_properties(&None, &None, &None, &None);
 
     assert!(!changed);
     assert!(register.access.is_none());

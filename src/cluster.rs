@@ -26,7 +26,7 @@ pub struct ClusterSpec {
   /// Default value after reset of any register contained within this cluster.
   pub default_register_reset_value: Option<u32>,
 
-  /// Default register bits that have a defined reset value for any register contained within 
+  /// Default register bits that have a defined reset value for any register contained within
   /// this cluster.
   pub default_register_reset_mask: Option<u32>,
 
@@ -86,7 +86,7 @@ impl ClusterSpec {
     }
   }
 
-  /// The full path to this cluster. 
+  /// The full path to this cluster.
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }
@@ -272,50 +272,50 @@ impl ClusterSpec {
 
   pub(crate) fn propagate_default_register_properties(
     &mut self,
-    size: Option<u32>,
-    reset_value: Option<u32>,
-    reset_mask: Option<u32>,
-    access: Option<AccessSpec>,
+    size: &Option<u32>,
+    reset_value: &Option<u32>,
+    reset_mask: &Option<u32>,
+    access: &Option<AccessSpec>,
   ) -> bool {
     let mut changed = false;
 
     if self.default_register_size.is_none() && size.is_some() {
-      self.default_register_size = size;
+      self.default_register_size = size.clone();
       changed = true;
     }
 
     if self.default_register_reset_value.is_none() && reset_value.is_some() {
-      self.default_register_reset_value = reset_value;
+      self.default_register_reset_value = reset_value.clone();
       changed = true;
     }
 
     if self.default_register_reset_mask.is_none() && reset_mask.is_some() {
-      self.default_register_reset_mask = reset_mask;
+      self.default_register_reset_mask = reset_mask.clone();
       changed = true;
     }
 
     if self.default_register_access.is_none() && access.is_some() {
-      self.default_register_access = access;
+      self.default_register_access = access.clone();
       changed = true;
     }
 
     for cluster in self.clusters.iter_mut() {
       if cluster.propagate_default_register_properties(
-        self.default_register_size,
-        self.default_register_reset_value,
-        self.default_register_reset_mask,
-        self.default_register_access,
+        &self.default_register_size,
+        &self.default_register_reset_value,
+        &self.default_register_reset_mask,
+        &self.default_register_access,
       ) {
         changed = true;
       }
     }
 
     for register in self.registers.iter_mut() {
-      if register.propagate_default_register_properties(
-        self.default_register_size,
-        self.default_register_reset_value,
-        self.default_register_reset_mask,
-        self.default_register_access,
+      if register.propagate_default_properties(
+        &self.default_register_size,
+        &self.default_register_reset_value,
+        &self.default_register_reset_mask,
+        &self.default_register_access,
       ) {
         changed = true;
       }
@@ -346,7 +346,7 @@ impl ClusterSpec {
       let mut registers = Vec::new();
       for register in ci.children.iter().filter_map(|rc| match rc {
         RegisterCluster::Register(ref r) => Some(r),
-        RegisterCluster::Cluster(_) => None
+        RegisterCluster::Cluster(_) => None,
       }) {
         registers.extend(RegisterSpec::new(register, &cluster.name)?);
       }
@@ -357,7 +357,7 @@ impl ClusterSpec {
       let mut clusters = Vec::new();
       for cluster in ci.children.iter().filter_map(|rc| match rc {
         RegisterCluster::Cluster(ref c) => Some(c),
-        RegisterCluster::Register(_) => None
+        RegisterCluster::Register(_) => None,
       }) {
         clusters.extend(ClusterSpec::new(cluster, &cluster.name)?);
       }
@@ -1344,10 +1344,10 @@ mod tests {
     let cluster = &mut cs[0];
 
     let changed = cluster.propagate_default_register_properties(
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(AccessSpec::ReadWriteOnce),
+      &Some(1),
+      &Some(2),
+      &Some(3),
+      &Some(AccessSpec::ReadWriteOnce),
     );
 
     assert!(changed);
@@ -1377,7 +1377,7 @@ mod tests {
     let mut cs = ClusterSpec::new(&ci, "path").unwrap();
     let cluster = &mut cs[0];
 
-    let changed = cluster.propagate_default_register_properties(None, None, None, None);
+    let changed = cluster.propagate_default_register_properties(&None, &None, &None, &None);
 
     assert!(!changed);
     assert!(cluster.default_register_access.is_none());
