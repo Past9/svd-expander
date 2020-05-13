@@ -1,6 +1,7 @@
 [![crates.io](https://img.shields.io/crates/d/svd-expander.svg)](https://crates.io/crates/svd-expander)
 [![crates.io](https://img.shields.io/crates/v/svd-expander.svg)](https://crates.io/crates/svd-expander)
 [![Documentation](https://docs.rs/svd-expander/badge.svg)](https://docs.rs/svd-expander)
+[![Rust CI](https://github.com/Past9/svd-expander/workflows/Rust/badge.svg?branch=master)](https://github.com/Past9/svd-expander/actions?query=workflow%3ARust+branch%3Amaster)
 
 # `svd-expander`
 
