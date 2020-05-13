@@ -44,7 +44,7 @@ pub struct CpuSpec {
   /// The hardware revision of the processor. The format is rNpM (N,M = [0 - 99]).
   pub revision: String,
 
-  /// The endianness of the processor. 
+  /// The endianness of the processor.
   pub endian: EndianSpec,
 
   /// Whether the processor is equipped with a memory protection unit.
@@ -53,7 +53,7 @@ pub struct CpuSpec {
   /// Whether the processor is equipped with a hardware floating point unit.
   pub fpu_present: bool,
 
-  /// The number of bits available in the Nested Vector Interrupt Controller (NVIC) for 
+  /// The number of bits available in the Nested Vector Interrupt Controller (NVIC) for
   /// configuring priority.
   pub nvic_priority_bits: u32,
 
@@ -74,7 +74,7 @@ impl CpuSpec {
   }
 }
 
-/// Represents information about a device specified in a CMSIS-SVD file. 
+/// Represents information about a device specified in a CMSIS-SVD file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceSpec {
   // Uniquely identifies the device.
@@ -83,16 +83,16 @@ pub struct DeviceSpec {
   /// The full name of the vendor of the device.
   pub version: Option<String>,
 
-  /// Description of the main features of the device (i.e. CPU, clock frequency, peripheral 
+  /// Description of the main features of the device (i.e. CPU, clock frequency, peripheral
   /// overview).
   pub description: Option<String>,
 
-  /// The number of data bits uniquely selected by each address. The value for Cortex-M-based 
+  /// The number of data bits uniquely selected by each address. The value for Cortex-M-based
   /// devices is `8` (byte-addressable).
   pub address_unit_bits: Option<u32>,
 
   /// The bit width of the maximum single data transfer supported by bu bus infrastructure.
-  /// Expected value for Cortex-M-based devices is 32. 
+  /// Expected value for Cortex-M-based devices is 32.
   pub width: Option<u32>,
 
   /// The processor included in the device.
@@ -114,13 +114,12 @@ pub struct DeviceSpec {
   pub default_register_access: Option<AccessSpec>,
 }
 impl DeviceSpec {
-
   /// Creates a new device by parsing an XML string following the CMSIS-SVD specification.
-  /// Expands all array definitions and resolves inheritance chains to fully resolve all 
-  /// populate all the components of the device. 
+  /// Expands all array definitions and resolves inheritance chains to fully resolve all
+  /// populate all the components of the device.
   ///
   /// # Arguments
-  /// 
+  ///
   /// * `xml` = An XML string containing a device specification in the CMSIS-SVD format.
   ///
   /// # Example
@@ -171,7 +170,7 @@ impl DeviceSpec {
       },
     };
 
-    // Resolve any inheritance chains. Each repetition resolves one level of 
+    // Resolve any inheritance chains. Each repetition resolves one level of
     // inheritance. We continue until the method returns false, which means
     // there were no changes and all the chains are fully resolved.
     while device.expand_inherited()? {}
@@ -201,12 +200,12 @@ impl DeviceSpec {
     self.peripherals.iter().flat_map(|p| p.iter_fields())
   }
 
-  /// Gets the peripheral that exists at the given path. Peripherals 
+  /// Gets the peripheral that exists at the given path. Peripherals
   /// top-level constructs and can't be nested, so a peripheral path
   /// is simply the name of the peripheral.
   ///
   /// # Arguments
-  /// 
+  ///
   /// * `path` = The path to the peripheral. Since peripherals are top-level
   /// components and can't be nested, this is just the name of the peripheral.
   pub fn get_peripheral(&self, path: &str) -> SvdExpanderResult<&PeripheralSpec> {
@@ -219,11 +218,11 @@ impl DeviceSpec {
     }
   }
 
-  /// Gets the register cluster that exists at the given path. 
+  /// Gets the register cluster that exists at the given path.
   ///
   /// # Arguments
-  /// 
-  /// * `path` = The path to the register cluster. 
+  ///
+  /// * `path` = The path to the register cluster.
   pub fn get_cluster(&self, path: &str) -> SvdExpanderResult<&ClusterSpec> {
     match self.iter_clusters().find(|c| c.path() == path) {
       Some(c) => Ok(c),
@@ -234,11 +233,11 @@ impl DeviceSpec {
     }
   }
 
-  /// Gets the register that exists at the given path. 
+  /// Gets the register that exists at the given path.
   ///
   /// # Arguments
-  /// 
-  /// * `path` = The path to the register. 
+  ///
+  /// * `path` = The path to the register.
   pub fn get_register(&self, path: &str) -> SvdExpanderResult<&RegisterSpec> {
     match self.iter_registers().find(|r| r.path() == path) {
       Some(r) => Ok(r),
@@ -249,11 +248,11 @@ impl DeviceSpec {
     }
   }
 
-  /// Gets the register field that exists at the given path. 
+  /// Gets the register field that exists at the given path.
   ///
   /// # Arguments
-  /// 
-  /// * `path` = The path to the register field. 
+  ///
+  /// * `path` = The path to the register field.
   pub fn get_field(&self, path: &str) -> SvdExpanderResult<&FieldSpec> {
     match self.iter_fields().find(|f| f.path() == path) {
       Some(r) => Ok(r),
@@ -350,9 +349,9 @@ impl DeviceSpec {
           }
         }
         // Whether we return true or false is irrelevant. We're not propagating
-        // changes through multiple levels of the tree so it doesn't matter whether 
+        // changes through multiple levels of the tree so it doesn't matter whether
         // anything changed or not.
-        Ok(true) 
+        Ok(true)
       })?;
     }
 
@@ -1245,7 +1244,10 @@ mod tests {
     assert_eq!("TIMER0", timer0.name);
     assert_eq!(1, timer0.interrupts.len());
     assert_eq!(0x40010000, timer0.base_address);
-    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer0.description.clone().unwrap());
+    assert_eq!(
+      "32 Timer / Counter, counting up or down from different sources",
+      timer0.description.clone().unwrap()
+    );
     assert_eq!(11, timer0.registers.len());
     assert_eq!("RELOAD[0]", timer0.registers[7].name);
     assert_eq!("RELOAD[1]", timer0.registers[8].name);
@@ -1256,7 +1258,10 @@ mod tests {
     assert_eq!("TIMER1", timer1.name);
     assert_eq!(1, timer1.interrupts.len());
     assert_eq!(0x40010100, timer1.base_address);
-    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer1.description.clone().unwrap());
+    assert_eq!(
+      "32 Timer / Counter, counting up or down from different sources",
+      timer1.description.clone().unwrap()
+    );
     assert_eq!(11, timer1.registers.len());
     assert_eq!("RELOAD[0]", timer1.registers[7].name);
     assert_eq!("RELOAD[1]", timer1.registers[8].name);
@@ -1267,7 +1272,10 @@ mod tests {
     assert_eq!("TIMER2", timer2.name);
     assert_eq!(1, timer2.interrupts.len());
     assert_eq!(0x40010200, timer2.base_address);
-    assert_eq!("32 Timer / Counter, counting up or down from different sources", timer2.description.clone().unwrap());
+    assert_eq!(
+      "32 Timer / Counter, counting up or down from different sources",
+      timer2.description.clone().unwrap()
+    );
     assert_eq!(11, timer2.registers.len());
     assert_eq!("RELOAD[0]", timer2.registers[7].name);
     assert_eq!("RELOAD[1]", timer2.registers[8].name);
@@ -1286,21 +1294,55 @@ mod tests {
     assert_eq!("MODE", timer2_interrupt_mode.name);
     assert!(timer2_interrupt_mode.derived_from_path().is_none());
 
-    assert_eq!("RELOAD[0]", ds.get_register("TIMER0.RELOAD[0]").unwrap().name);
-    assert_eq!("RELOAD[1]", ds.get_register("TIMER0.RELOAD[1]").unwrap().name);
-    assert_eq!("RELOAD[2]", ds.get_register("TIMER0.RELOAD[2]").unwrap().name);
-    assert_eq!("RELOAD[3]", ds.get_register("TIMER0.RELOAD[3]").unwrap().name);
+    assert_eq!(
+      "RELOAD[0]",
+      ds.get_register("TIMER0.RELOAD[0]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[1]",
+      ds.get_register("TIMER0.RELOAD[1]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[2]",
+      ds.get_register("TIMER0.RELOAD[2]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[3]",
+      ds.get_register("TIMER0.RELOAD[3]").unwrap().name
+    );
 
-    assert_eq!("RELOAD[0]", ds.get_register("TIMER1.RELOAD[0]").unwrap().name);
-    assert_eq!("RELOAD[1]", ds.get_register("TIMER1.RELOAD[1]").unwrap().name);
-    assert_eq!("RELOAD[2]", ds.get_register("TIMER1.RELOAD[2]").unwrap().name);
-    assert_eq!("RELOAD[3]", ds.get_register("TIMER1.RELOAD[3]").unwrap().name);
+    assert_eq!(
+      "RELOAD[0]",
+      ds.get_register("TIMER1.RELOAD[0]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[1]",
+      ds.get_register("TIMER1.RELOAD[1]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[2]",
+      ds.get_register("TIMER1.RELOAD[2]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[3]",
+      ds.get_register("TIMER1.RELOAD[3]").unwrap().name
+    );
 
-    assert_eq!("RELOAD[0]", ds.get_register("TIMER2.RELOAD[0]").unwrap().name);
-    assert_eq!("RELOAD[1]", ds.get_register("TIMER2.RELOAD[1]").unwrap().name);
-    assert_eq!("RELOAD[2]", ds.get_register("TIMER2.RELOAD[2]").unwrap().name);
-    assert_eq!("RELOAD[3]", ds.get_register("TIMER2.RELOAD[3]").unwrap().name);
-
-
+    assert_eq!(
+      "RELOAD[0]",
+      ds.get_register("TIMER2.RELOAD[0]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[1]",
+      ds.get_register("TIMER2.RELOAD[1]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[2]",
+      ds.get_register("TIMER2.RELOAD[2]").unwrap().name
+    );
+    assert_eq!(
+      "RELOAD[3]",
+      ds.get_register("TIMER2.RELOAD[3]").unwrap().name
+    );
   }
 }

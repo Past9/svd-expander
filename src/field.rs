@@ -15,7 +15,7 @@ pub struct FieldSpec {
   /// Description of the field's usage, purpose, and/or operation.
   pub description: Option<String>,
 
-  /// The position of the least-significant bit of this field within its register. 
+  /// The position of the least-significant bit of this field within its register.
   pub offset: u32,
 
   /// The bit width of the field.
@@ -71,7 +71,7 @@ impl FieldSpec {
     }
   }
 
-  /// The full path to this field. 
+  /// The full path to this field.
   pub fn path(&self) -> String {
     format!("{}.{}", self.preceding_path, self.name)
   }
