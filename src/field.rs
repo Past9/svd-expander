@@ -126,14 +126,26 @@ impl FieldSpec {
     changed
   }
 
-  pub(crate) fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_properties(
     &mut self,
-    access: Option<AccessSpec>,
+    access: &Option<AccessSpec>,
+    write_constraint: &Option<WriteConstraintSpec>,
+    modified_write_values: &Option<ModifiedWriteValuesSpec>,
   ) -> bool {
     let mut changed = false;
 
     if self.access.is_none() && access.is_some() {
-      self.access = access;
+      self.access = access.clone();
+      changed = true;
+    }
+
+    if self.write_constraint.is_none() && write_constraint.is_some() {
+      self.write_constraint = write_constraint.clone();
+      changed = true;
+    }
+
+    if self.modified_write_values.is_none() && modified_write_values.is_some() {
+      self.modified_write_values = modified_write_values.clone();
       changed = true;
     }
 
@@ -504,10 +516,25 @@ mod tests {
     let mut fs = FieldSpec::new(&fi, "path").unwrap();
     let field = &mut fs[0];
 
-    let changed = field.propagate_default_register_properties(Some(AccessSpec::ReadWriteOnce));
+    let changed = field.propagate_default_properties(
+      &Some(AccessSpec::ReadWriteOnce),
+      &Some(WriteConstraintSpec::Range(WriteConstraintRangeSpec {
+        min: 2,
+        max: 4,
+      })),
+      &Some(ModifiedWriteValuesSpec::ZeroToToggle),
+    );
 
     assert!(changed);
     assert_eq!(AccessSpec::ReadWriteOnce, field.access.unwrap());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      field.write_constraint.clone().unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::ZeroToToggle,
+      field.modified_write_values.clone().unwrap()
+    );
   }
 
   #[test]
@@ -528,9 +555,11 @@ mod tests {
     let mut fs = FieldSpec::new(&fi, "path").unwrap();
     let field = &mut fs[0];
 
-    let changed = field.propagate_default_register_properties(None);
+    let changed = field.propagate_default_properties(&None, &None, &None);
 
     assert!(!changed);
     assert!(field.access.is_none());
+    assert!(field.write_constraint.is_none());
+    assert!(field.modified_write_values.is_none());
   }
 }

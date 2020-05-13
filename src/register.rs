@@ -179,37 +179,41 @@ impl RegisterSpec {
     changed
   }
 
-  pub(crate) fn propagate_default_register_properties(
+  pub(crate) fn propagate_default_properties(
     &mut self,
-    size: Option<u32>,
-    reset_value: Option<u32>,
-    reset_mask: Option<u32>,
-    access: Option<AccessSpec>,
+    size: &Option<u32>,
+    reset_value: &Option<u32>,
+    reset_mask: &Option<u32>,
+    access: &Option<AccessSpec>,
   ) -> bool {
     let mut changed = false;
 
     if self.size.is_none() && size.is_some() {
-      self.size = size;
+      self.size = size.clone();
       changed = true;
     }
 
     if self.reset_value.is_none() && reset_value.is_some() {
-      self.reset_value = reset_value;
+      self.reset_value = reset_value.clone();
       changed = true;
     }
 
     if self.reset_mask.is_none() && reset_mask.is_some() {
-      self.reset_mask = reset_mask;
+      self.reset_mask = reset_mask.clone();
       changed = true;
     }
 
     if self.access.is_none() && access.is_some() {
-      self.access = access;
+      self.access = access.clone();
       changed = true;
     }
 
     for field in self.fields.iter_mut() {
-      if field.propagate_default_register_properties(self.access) {
+      if field.propagate_default_properties(
+        &self.access,
+        &self.default_field_write_constraint,
+        &self.default_field_modified_write_values,
+      ) {
         changed = true;
       }
     }
@@ -912,11 +916,11 @@ mod tests {
     let mut rs = RegisterSpec::new(&ri, "path").unwrap();
     let register = &mut rs[0];
 
-    let changed = register.propagate_default_register_properties(
-      Some(1),
-      Some(2),
-      Some(3),
-      Some(AccessSpec::ReadWriteOnce),
+    let changed = register.propagate_default_properties(
+      &Some(1),
+      &Some(2),
+      &Some(3),
+      &Some(AccessSpec::ReadWriteOnce),
     );
 
     assert!(changed);
@@ -943,7 +947,7 @@ mod tests {
     let mut rs = RegisterSpec::new(&ri, "path").unwrap();
     let register = &mut rs[0];
 
-    let changed = register.propagate_default_register_properties(None, None, None, None);
+    let changed = register.propagate_default_properties(&None, &None, &None, &None);
 
     assert!(!changed);
     assert!(register.access.is_none());

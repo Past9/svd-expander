@@ -326,10 +326,10 @@ impl DeviceSpec {
 
     for peripheral in self.peripherals.iter_mut() {
       if peripheral.propagate_default_register_properties(
-        self.default_register_size,
-        self.default_register_reset_value,
-        self.default_register_reset_mask,
-        self.default_register_access,
+        &self.default_register_size,
+        &self.default_register_reset_value,
+        &self.default_register_reset_mask,
+        &self.default_register_access,
       ) {
         changed = true;
       }
@@ -362,7 +362,10 @@ impl DeviceSpec {
 #[cfg(test)]
 mod tests {
   use super::{DeviceSpec, EndianSpec};
-  use crate::AccessSpec;
+  use crate::{
+    value::{ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec},
+    AccessSpec,
+  };
   use svd_parser::{parse::Parse, Device};
   use xmltree::Element;
 
@@ -1105,6 +1108,13 @@ mod tests {
                 <access>read-write</access>
                 <resetValue>0x00000000</resetValue>
                 <resetMask>0x0771</resetMask>
+                <writeConstraint>
+                  <range>
+                    <minimum>2</minimum>
+                    <maximum>4</maximum>
+                  </range>
+                </writeConstraint>
+                <modifiedWriteValues>oneToToggle</modifiedWriteValues>
 
                 <fields>
                   <!-- EN: Interrupt Enable -->
@@ -1285,14 +1295,38 @@ mod tests {
     let timer0_interrupt_mode = ds.get_field("TIMER0.INT.MODE").unwrap();
     assert_eq!("MODE", timer0_interrupt_mode.name);
     assert!(timer0_interrupt_mode.derived_from_path().is_none());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      timer0_interrupt_mode.write_constraint.clone().unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::OneToToggle,
+      timer0_interrupt_mode.modified_write_values.clone().unwrap()
+    );
 
     let timer1_interrupt_mode = ds.get_field("TIMER1.INT.MODE").unwrap();
     assert_eq!("MODE", timer1_interrupt_mode.name);
     assert!(timer1_interrupt_mode.derived_from_path().is_none());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      timer1_interrupt_mode.write_constraint.clone().unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::OneToToggle,
+      timer1_interrupt_mode.modified_write_values.clone().unwrap()
+    );
 
     let timer2_interrupt_mode = ds.get_field("TIMER2.INT.MODE").unwrap();
     assert_eq!("MODE", timer2_interrupt_mode.name);
     assert!(timer2_interrupt_mode.derived_from_path().is_none());
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      timer2_interrupt_mode.write_constraint.clone().unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::OneToToggle,
+      timer2_interrupt_mode.modified_write_values.clone().unwrap()
+    );
 
     assert_eq!(
       "RELOAD[0]",
