@@ -2,7 +2,10 @@ use svd_parser::{Cluster, ClusterInfo, RegisterCluster};
 
 use super::register::RegisterSpec;
 use super::{AccessSpec, FieldSpec};
-use crate::error::{SvdExpanderError, SvdExpanderResult};
+use crate::{
+  error::{SvdExpanderError, SvdExpanderResult},
+  value::EnumeratedValueSetSpec,
+};
 
 /// Describes a cluster of registers that exist on a peripheral. Clusters may be top-level
 /// constructs of a peripheral or may be nested within other clusters.
@@ -118,6 +121,18 @@ impl ClusterSpec {
     Box::new(self.iter_registers().flat_map(|r| r.fields.iter()))
   }
 
+  /// Recursively iterates all the enumerated value sets on all the regsiters contained within
+  /// this cluster.
+  pub fn iter_enumerated_value_sets<'a>(
+    &'a self,
+  ) -> Box<dyn Iterator<Item = &EnumeratedValueSetSpec> + 'a> {
+    Box::new(
+      self
+        .iter_registers()
+        .flat_map(|r| r.iter_enumerated_value_sets()),
+    )
+  }
+
   pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
     let mut cluster = Self {
       preceding_path: preceding_path.to_owned(),
@@ -205,6 +220,28 @@ impl ClusterSpec {
 
     for register in &mut self.registers.iter_mut() {
       if register.mutate_fields(f)? {
+        changed = true;
+      }
+    }
+
+    Ok(changed)
+  }
+
+  pub(crate) fn mutate_enumerated_value_sets<F>(&mut self, f: F) -> SvdExpanderResult<bool>
+  where
+    F: Fn(&mut EnumeratedValueSetSpec) -> SvdExpanderResult<bool>,
+    F: Copy,
+  {
+    let mut changed = false;
+
+    for cluster in &mut self.clusters.iter_mut() {
+      if cluster.mutate_enumerated_value_sets(f)? {
+        changed = true;
+      }
+    }
+
+    for register in &mut self.registers.iter_mut() {
+      if register.mutate_enumerated_value_sets(f)? {
         changed = true;
       }
     }

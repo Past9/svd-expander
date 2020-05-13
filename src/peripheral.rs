@@ -1,5 +1,5 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::error::SvdExpanderResult;
+use crate::{error::SvdExpanderResult, value::EnumeratedValueSetSpec};
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
 /// Describes an address range uniquely mapped to a peripheral.
@@ -191,6 +191,21 @@ impl PeripheralSpec {
       .chain(self.registers.iter().flat_map(|r| r.fields.iter()))
   }
 
+  /// Recursively iterates all the enumerated valu sets on all the fields within
+  /// this peripheral.
+  pub fn iter_enumerated_value_sets(&self) -> impl Iterator<Item = &EnumeratedValueSetSpec> {
+    self
+      .clusters
+      .iter()
+      .flat_map(|c| c.iter_enumerated_value_sets())
+      .chain(
+        self
+          .registers
+          .iter()
+          .flat_map(|r| r.iter_enumerated_value_sets()),
+      )
+  }
+
   /// The full path of the peripheral that this peripheral inherits from (if any).
   /// Since all peripherals are top-level components of the device, this is just the
   /// name of the other peripheral.
@@ -257,6 +272,28 @@ impl PeripheralSpec {
 
     for register in &mut self.registers.iter_mut() {
       if register.mutate_fields(f)? {
+        changed = true;
+      }
+    }
+
+    Ok(changed)
+  }
+
+  pub(crate) fn mutate_enumerated_value_sets<F>(&mut self, f: F) -> SvdExpanderResult<bool>
+  where
+    F: Fn(&mut EnumeratedValueSetSpec) -> SvdExpanderResult<bool>,
+    F: Copy,
+  {
+    let mut changed = false;
+
+    for cluster in &mut self.clusters.iter_mut() {
+      if cluster.mutate_enumerated_value_sets(f)? {
+        changed = true;
+      }
+    }
+
+    for register in &mut self.registers.iter_mut() {
+      if register.mutate_enumerated_value_sets(f)? {
         changed = true;
       }
     }

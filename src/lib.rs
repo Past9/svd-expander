@@ -42,6 +42,10 @@ pub use error::{SvdExpanderError, SvdExpanderResult};
 pub use field::FieldSpec;
 pub use peripheral::{AddressBlockSpec, InterruptSpec, PeripheralSpec};
 pub use register::RegisterSpec;
+pub use value::{
+  EnumeratedValueSetSpec, EnumeratedValueSpec, EnumeratedValueUsageSpec, EnumeratedValueValueSpec,
+  ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec,
+};
 
 /// Defines access rights for fields on the device, though it may be specified at a
 /// higher level than individual fields.

@@ -1,5 +1,8 @@
 use super::{peripheral::PeripheralSpec, AccessSpec, ClusterSpec, FieldSpec, RegisterSpec};
-use crate::error::{SvdExpanderError, SvdExpanderResult};
+use crate::{
+  error::{SvdExpanderError, SvdExpanderResult},
+  value::EnumeratedValueSetSpec,
+};
 use svd_parser::{Cpu, Device, Endian};
 
 /// Defines the endianness of a CPU.
@@ -200,6 +203,14 @@ impl DeviceSpec {
     self.peripherals.iter().flat_map(|p| p.iter_fields())
   }
 
+  /// Recursively iterates all the enumerated value sets on the device.
+  pub fn iter_enumerated_value_sets(&self) -> impl Iterator<Item = &EnumeratedValueSetSpec> {
+    self
+      .peripherals
+      .iter()
+      .flat_map(|p| p.iter_enumerated_value_sets())
+  }
+
   /// Gets the peripheral that exists at the given path. Peripherals
   /// top-level constructs and can't be nested, so a peripheral path
   /// is simply the name of the peripheral.
@@ -257,7 +268,27 @@ impl DeviceSpec {
     match self.iter_fields().find(|f| f.path() == path) {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
-        "No fields at path '{}'",
+        "No field at path '{}'",
+        path
+      ))),
+    }
+  }
+
+  /// Gets the enumerated value set that exists at the given path.
+  ///
+  /// # Arguments
+  ///
+  /// * `path` = The path to the enumerated value set.
+  pub fn get_enumerated_value_set(&self, path: &str) -> SvdExpanderResult<&EnumeratedValueSetSpec> {
+    let set = self.iter_enumerated_value_sets().find(|s| match s.path() {
+      Some(ref p) => p == path,
+      None => false,
+    });
+
+    match set {
+      Some(ref s) => Ok(s),
+      None => Err(SvdExpanderError::new(&format!(
+        "No enumerated value set at path '{}'",
         path
       ))),
     }
@@ -267,6 +298,22 @@ impl DeviceSpec {
     let reference_device = self.clone();
 
     let mut changed = false;
+
+    for peripheral in self.peripherals.iter_mut() {
+      if peripheral.mutate_enumerated_value_sets(|s| {
+        let mut set_changed = false;
+
+        if let Some(ref derived_from) = s.derived_from_path() {
+          if s.inherit_from(reference_device.get_enumerated_value_set(derived_from)?) {
+            set_changed = true;
+          }
+        }
+
+        Ok(set_changed)
+      })? {
+        changed = true;
+      }
+    }
 
     for peripheral in self.peripherals.iter_mut() {
       if peripheral.mutate_fields(|f| {
@@ -363,7 +410,10 @@ impl DeviceSpec {
 mod tests {
   use super::{DeviceSpec, EndianSpec};
   use crate::{
-    value::{ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec},
+    value::{
+      EnumeratedValueValueSpec, ModifiedWriteValuesSpec, WriteConstraintRangeSpec,
+      WriteConstraintSpec,
+    },
     AccessSpec,
   };
   use svd_parser::{parse::Parse, Device};
@@ -1303,6 +1353,35 @@ mod tests {
       ModifiedWriteValuesSpec::OneToToggle,
       timer0_interrupt_mode.modified_write_values.clone().unwrap()
     );
+    assert_eq!(1, timer0_interrupt_mode.enumerated_value_sets.len());
+    assert_eq!(
+      3,
+      timer0_interrupt_mode.enumerated_value_sets[0].values.len()
+    );
+    assert_eq!(
+      "Match",
+      timer0_interrupt_mode.enumerated_value_sets[0].values[0].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(0)),
+      timer0_interrupt_mode.enumerated_value_sets[0].values[0].value
+    );
+    assert_eq!(
+      "Underflow",
+      timer0_interrupt_mode.enumerated_value_sets[0].values[1].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(1)),
+      timer0_interrupt_mode.enumerated_value_sets[0].values[1].value
+    );
+    assert_eq!(
+      "Overflow",
+      timer0_interrupt_mode.enumerated_value_sets[0].values[2].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(2)),
+      timer0_interrupt_mode.enumerated_value_sets[0].values[2].value
+    );
 
     let timer1_interrupt_mode = ds.get_field("TIMER1.INT.MODE").unwrap();
     assert_eq!("MODE", timer1_interrupt_mode.name);
@@ -1315,6 +1394,35 @@ mod tests {
       ModifiedWriteValuesSpec::OneToToggle,
       timer1_interrupt_mode.modified_write_values.clone().unwrap()
     );
+    assert_eq!(1, timer1_interrupt_mode.enumerated_value_sets.len());
+    assert_eq!(
+      3,
+      timer1_interrupt_mode.enumerated_value_sets[0].values.len()
+    );
+    assert_eq!(
+      "Match",
+      timer1_interrupt_mode.enumerated_value_sets[0].values[0].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(0)),
+      timer1_interrupt_mode.enumerated_value_sets[0].values[0].value
+    );
+    assert_eq!(
+      "Underflow",
+      timer1_interrupt_mode.enumerated_value_sets[0].values[1].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(1)),
+      timer1_interrupt_mode.enumerated_value_sets[0].values[1].value
+    );
+    assert_eq!(
+      "Overflow",
+      timer1_interrupt_mode.enumerated_value_sets[0].values[2].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(2)),
+      timer1_interrupt_mode.enumerated_value_sets[0].values[2].value
+    );
 
     let timer2_interrupt_mode = ds.get_field("TIMER2.INT.MODE").unwrap();
     assert_eq!("MODE", timer2_interrupt_mode.name);
@@ -1326,6 +1434,43 @@ mod tests {
     assert_eq!(
       ModifiedWriteValuesSpec::OneToToggle,
       timer2_interrupt_mode.modified_write_values.clone().unwrap()
+    );
+    assert_eq!(
+      WriteConstraintSpec::Range(WriteConstraintRangeSpec { min: 2, max: 4 }),
+      timer2_interrupt_mode.write_constraint.clone().unwrap()
+    );
+    assert_eq!(
+      ModifiedWriteValuesSpec::OneToToggle,
+      timer2_interrupt_mode.modified_write_values.clone().unwrap()
+    );
+    assert_eq!(1, timer2_interrupt_mode.enumerated_value_sets.len());
+    assert_eq!(
+      3,
+      timer2_interrupt_mode.enumerated_value_sets[0].values.len()
+    );
+    assert_eq!(
+      "Match",
+      timer2_interrupt_mode.enumerated_value_sets[0].values[0].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(0)),
+      timer2_interrupt_mode.enumerated_value_sets[0].values[0].value
+    );
+    assert_eq!(
+      "Underflow",
+      timer2_interrupt_mode.enumerated_value_sets[0].values[1].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(1)),
+      timer2_interrupt_mode.enumerated_value_sets[0].values[1].value
+    );
+    assert_eq!(
+      "Overflow",
+      timer2_interrupt_mode.enumerated_value_sets[0].values[2].name
+    );
+    assert_eq!(
+      Some(EnumeratedValueValueSpec::Value(2)),
+      timer2_interrupt_mode.enumerated_value_sets[0].values[2].value
     );
 
     assert_eq!(
