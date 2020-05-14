@@ -21,8 +21,8 @@
 //!             <addressOffset>0x00</addressOffset>
 //!             <fields>
 //!
-//!               <!-- 
-//!                 This field is a template that will be expanded 
+//!               <!--
+//!                 This field is a template that will be expanded
 //!                 out to 16 input fields named D1 through D16.
 //!               -->
 //!
@@ -40,9 +40,9 @@
 //!         </registers>
 //!       </peripheral>
 //!
-//!       <!-- 
-//!         GPIOA will be copied to make GPIOB below, which is identical 
-//!         except for any overridden properties (just name and 
+//!       <!--
+//!         GPIOA will be copied to make GPIOB below, which is identical
+//!         except for any overridden properties (just name and
 //!         baseAddress in this case).
 //!       -->
 //!
@@ -68,15 +68,17 @@
 //!   assert_eq!(9, device.get_field("GPIOA.IDR.D10").unwrap().offset);
 //!   // ...etc...
 //!
-//!   // GPIOB also has an IDR register with 16 fields, which was inherited 
+//!   // GPIOB also has an IDR register with 16 fields, which was inherited
 //!   // from GPIOA.
 //!   assert_eq!(16, device.get_register("GPIOB.IDR").unwrap().fields.len());
 //!
 //!   // GPIOB kept its name and base address when it inherited properties
 //!   // from GPIOA.
 //!   assert_eq!("GPIOB", device.get_peripheral("GPIOB").unwrap().name);
-//!   assert_eq!(0x40010100, device.get_peripheral("GPIOB").unwrap().base_address);
-//!
+//!   assert_eq!(
+//!     0x40010100,
+//!     device.get_peripheral("GPIOB").unwrap().base_address
+//!   );
 //! }
 //! ```
 //!
