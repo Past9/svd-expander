@@ -1,4 +1,4 @@
-use crate::SvdExpanderResult;
+use crate::{SvdExpanderError, SvdExpanderResult};
 use svd_parser::{
   writeconstraint::WriteConstraintRange, EnumeratedValue, EnumeratedValues, ModifiedWriteValues,
   Usage, WriteConstraint,
@@ -136,6 +136,7 @@ impl EnumeratedValueUsageSpec {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumeratedValueSetSpec {
   preceding_path: String,
+  register_path: String,
   derived_from: Option<String>,
 
   /// The name of the set of enumerated values.
@@ -148,9 +149,14 @@ pub struct EnumeratedValueSetSpec {
   pub values: Vec<EnumeratedValueSpec>,
 }
 impl EnumeratedValueSetSpec {
-  pub(crate) fn new(ev: &EnumeratedValues, preceding_path: &str) -> SvdExpanderResult<Self> {
+  pub(crate) fn new(
+    ev: &EnumeratedValues,
+    preceding_path: &str,
+    register_path: &str,
+  ) -> SvdExpanderResult<Self> {
     Ok(Self {
       preceding_path: preceding_path.to_owned(),
+      register_path: register_path.to_owned(),
       derived_from: ev.derived_from.clone(),
       name: ev.name.clone(),
       usage: match ev.usage {
@@ -166,28 +172,37 @@ impl EnumeratedValueSetSpec {
   }
 
   /// The full path to the enumerated value set that this set inherits from (if any).
-  pub fn derived_from_path(&self) -> Option<String> {
+  pub(crate) fn derived_from_path(&self) -> SvdExpanderResult<Option<String>> {
     match self.derived_from {
       Some(ref df) => match df.contains(".") {
-        true => Some(df.clone()),
-        false => Some(format!("{}.{}", self.preceding_path, df)),
+        true => {
+          return Err(SvdExpanderError::new(
+            "Qualified paths to enumerated value sets are not currently supported.",
+          ))
+        }
+        false => Ok(Some(format!("{}.{}", self.register_path, df))),
       },
-      None => None,
+      None => Ok(None),
     }
   }
 
   /// The full path to this enumerated value set. Will be `None` if this set does not
   /// have a `name` (`name` is `None`).
-  pub fn path(&self) -> Option<String> {
+  pub(crate) fn path(&self) -> Option<String> {
     match self.name {
-      Some(ref n) => Some(format!("{}.{}", self.preceding_path, n)),
+      Some(ref n) => Some(format!("{}.{}", self.register_path, n)),
       None => None,
     }
   }
 
-  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub(crate) fn clone_with_preceding_paths(
+    &self,
+    preceding_path: &str,
+    register_path: &str,
+  ) -> Self {
     Self {
       preceding_path: preceding_path.to_owned(),
+      register_path: register_path.to_owned(),
       derived_from: None,
       name: self.name.clone(),
       usage: self.usage.clone(),

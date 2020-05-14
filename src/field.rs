@@ -105,7 +105,7 @@ impl FieldSpec {
     field.enumerated_value_sets = self
       .enumerated_value_sets
       .iter()
-      .map(|f| f.clone_with_preceding_path(&field.path()))
+      .map(|s| s.clone_with_preceding_paths(&field.path(), &field.preceding_path))
       .collect();
 
     field
@@ -205,7 +205,7 @@ impl FieldSpec {
     field.enumerated_value_sets = fi
       .enumerated_values
       .iter()
-      .map(|v| EnumeratedValueSetSpec::new(v, &field.path()))
+      .map(|v| EnumeratedValueSetSpec::new(v, &field.path(), &field.preceding_path))
       .collect::<SvdExpanderResult<Vec<EnumeratedValueSetSpec>>>()?;
 
     Ok(field)

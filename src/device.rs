@@ -279,7 +279,7 @@ impl DeviceSpec {
   /// # Arguments
   ///
   /// * `path` = The path to the enumerated value set.
-  pub fn get_enumerated_value_set(&self, path: &str) -> SvdExpanderResult<&EnumeratedValueSetSpec> {
+  pub (crate) fn get_enumerated_value_set(&self, path: &str) -> SvdExpanderResult<&EnumeratedValueSetSpec> {
     let set = self.iter_enumerated_value_sets().find(|s| match s.path() {
       Some(ref p) => p == path,
       None => false,
@@ -303,7 +303,7 @@ impl DeviceSpec {
       if peripheral.mutate_enumerated_value_sets(|s| {
         let mut set_changed = false;
 
-        if let Some(ref derived_from) = s.derived_from_path() {
+        if let Some(ref derived_from) = s.derived_from_path()? {
           if s.inherit_from(reference_device.get_enumerated_value_set(derived_from)?) {
             set_changed = true;
           }
