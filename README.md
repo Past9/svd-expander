@@ -88,8 +88,4 @@ fn main() {
 ```
 
 This crate is intended for use in code generators. It is under active development and bug
-reports are welcome.
-
-Feature requests may be considered, but [svd-expander](https://crates.io/crates/svd-expander)
-depends on [svd-parser](https://crates.io/crates/svd-parser) (at least for now) to parse the
-SVD files, so it can only implement the features supported by the parser.
+reports and feature requests are welcome.
