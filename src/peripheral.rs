@@ -144,7 +144,11 @@ impl PeripheralSpec {
           RegisterCluster::Register(ref r) => Some(r),
           RegisterCluster::Cluster(_) => None,
         }) {
-          registers.extend(RegisterSpec::new(register, &peripheral.name)?);
+          registers.extend(RegisterSpec::new(
+            register,
+            &peripheral.name,
+            peripheral.base_address,
+          )?);
         }
         registers
       }
@@ -158,7 +162,11 @@ impl PeripheralSpec {
           RegisterCluster::Cluster(ref c) => Some(c),
           RegisterCluster::Register(_) => None,
         }) {
-          clusters.extend(ClusterSpec::new(cluster, &peripheral.name)?);
+          clusters.extend(ClusterSpec::new(
+            cluster,
+            &peripheral.name,
+            peripheral.base_address,
+          )?);
         }
         clusters
       }
@@ -367,7 +375,7 @@ impl PeripheralSpec {
       } else {
         self
           .registers
-          .push(ancestor.clone_with_preceding_path(&self.path()));
+          .push(ancestor.clone_with_overrides(&self.path(), self.base_address));
         changed = true;
       }
     }
@@ -380,7 +388,7 @@ impl PeripheralSpec {
       } else {
         self
           .clusters
-          .push(ancestor.clone_with_preceding_path(&self.path()));
+          .push(ancestor.clone_with_overrides(&self.path(), self.base_address));
         changed = true;
       }
     }

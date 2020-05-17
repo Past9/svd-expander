@@ -13,6 +13,7 @@ use crate::{
 pub struct ClusterSpec {
   preceding_path: String,
   derived_from: Option<String>,
+  base_address: u32,
 
   /// Name that identifies the cluster. Must be unique within the scope of its parent.
   pub name: String,
@@ -43,9 +44,13 @@ pub struct ClusterSpec {
   pub clusters: Vec<ClusterSpec>,
 }
 impl ClusterSpec {
-  pub(crate) fn new(c: &Cluster, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
+  pub(crate) fn new(
+    c: &Cluster,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match c {
-      Cluster::Single(ref ci) => vec![Self::from_cluster_info(ci, preceding_path)?],
+      Cluster::Single(ref ci) => vec![Self::from_cluster_info(ci, preceding_path, base_address)?],
       Cluster::Array(ref ci, ref d) => {
         let dim_indices = if let Some(ref di) = d.dim_index {
           if d.dim != di.len() as u32 {
@@ -59,7 +64,7 @@ impl ClusterSpec {
           (0..d.dim).map(|v| v.to_string()).collect()
         };
 
-        let prototype = Self::from_cluster_info(ci, preceding_path)?;
+        let prototype = Self::from_cluster_info(ci, preceding_path, base_address)?;
         let mut cluster_specs = Vec::with_capacity(d.dim as usize);
 
         for (n, dim_index) in dim_indices.iter().enumerate() {
@@ -76,6 +81,11 @@ impl ClusterSpec {
     };
 
     Ok(specs)
+  }
+
+  /// The memory address of this cluster
+  pub fn address(&self) -> u32 {
+    self.base_address + self.address_offset
   }
 
   /// The full path to the cluster that this cluster inherits from (if any).
@@ -133,10 +143,11 @@ impl ClusterSpec {
     )
   }
 
-  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub(crate) fn clone_with_overrides(&self, preceding_path: &str, base_address: u32) -> Self {
     let mut cluster = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
+      base_address,
       name: self.name.clone(),
       description: self.description.clone(),
       address_offset: self.address_offset,
@@ -151,13 +162,13 @@ impl ClusterSpec {
     cluster.registers = self
       .registers
       .iter()
-      .map(|r| r.clone_with_preceding_path(&cluster.path()))
+      .map(|r| r.clone_with_overrides(&cluster.path(), cluster.address()))
       .collect();
 
     cluster.clusters = self
       .clusters
       .iter()
-      .map(|c| c.clone_with_preceding_path(&cluster.path()))
+      .map(|c| c.clone_with_overrides(&cluster.path(), cluster.address()))
       .collect();
 
     cluster
@@ -286,7 +297,7 @@ impl ClusterSpec {
       } else {
         self
           .registers
-          .push(ancestor.clone_with_preceding_path(&self.path()));
+          .push(ancestor.clone_with_overrides(&self.path(), self.address()));
         changed = true;
       }
     }
@@ -299,7 +310,7 @@ impl ClusterSpec {
       } else {
         self
           .clusters
-          .push(ancestor.clone_with_preceding_path(&self.path()));
+          .push(ancestor.clone_with_overrides(&self.path(), self.address()));
         changed = true;
       }
     }
@@ -361,10 +372,15 @@ impl ClusterSpec {
     changed
   }
 
-  fn from_cluster_info(ci: &ClusterInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
+  fn from_cluster_info(
+    ci: &ClusterInfo,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Self> {
     let mut cluster = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: ci.derived_from.clone(),
+      base_address,
       name: ci.name.clone(),
       description: ci.description.clone(),
       address_offset: ci.address_offset,
@@ -385,18 +401,22 @@ impl ClusterSpec {
         RegisterCluster::Register(ref r) => Some(r),
         RegisterCluster::Cluster(_) => None,
       }) {
-        registers.extend(RegisterSpec::new(register, &cluster.name)?);
+        registers.extend(RegisterSpec::new(
+          register,
+          &cluster.path(),
+          cluster.address(),
+        )?);
       }
       registers
     };
 
     cluster.clusters = {
       let mut clusters = Vec::new();
-      for cluster in ci.children.iter().filter_map(|rc| match rc {
+      for c in ci.children.iter().filter_map(|rc| match rc {
         RegisterCluster::Cluster(ref c) => Some(c),
         RegisterCluster::Register(_) => None,
       }) {
-        clusters.extend(ClusterSpec::new(cluster, &cluster.name)?);
+        clusters.extend(ClusterSpec::new(c, &cluster.path(), cluster.address())?);
       }
       clusters
     };
@@ -460,7 +480,7 @@ mod tests {
 
     let ci = Cluster::parse(&el).unwrap();
 
-    let mut specs = ClusterSpec::new(&ci, "").unwrap();
+    let mut specs = ClusterSpec::new(&ci, "", 0).unwrap();
 
     assert_eq!(1, specs.len());
 
@@ -517,7 +537,7 @@ mod tests {
 
     let ci = Cluster::parse(&el).unwrap();
 
-    let mut specs = ClusterSpec::new(&ci, "").unwrap();
+    let mut specs = ClusterSpec::new(&ci, "", 0).unwrap();
 
     assert_eq!(3, specs.len());
 
@@ -587,7 +607,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -607,7 +627,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -648,7 +668,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -668,7 +688,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -705,7 +725,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -725,7 +745,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -763,7 +783,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -783,7 +803,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -825,7 +845,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -845,7 +865,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -883,7 +903,7 @@ mod tests {
     .unwrap();
 
     let descendant_ci = Cluster::parse(&descendant_el).unwrap();
-    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "").unwrap();
+    let mut descendant_specs = ClusterSpec::new(&descendant_ci, "", 0).unwrap();
     let mut descendant_cs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -903,7 +923,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ci = Cluster::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "").unwrap();
+    let mut ancestor_specs = ClusterSpec::new(&ancestor_ci, "", 0).unwrap();
     let ancestor_cs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_cs.inherit_from(&ancestor_cs);
@@ -941,7 +961,7 @@ mod tests {
     .unwrap();
 
     let ri = Cluster::parse(&el).unwrap();
-    let rs = ClusterSpec::new(&ri, "path").unwrap();
+    let rs = ClusterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.FOO", rs[0].path());
   }
@@ -963,7 +983,7 @@ mod tests {
     .unwrap();
 
     let ri = Cluster::parse(&el).unwrap();
-    let rs = ClusterSpec::new(&ri, "path").unwrap();
+    let rs = ClusterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.FOO_one", rs[0].path());
     assert_eq!("path.FOO_two", rs[1].path());
@@ -984,7 +1004,7 @@ mod tests {
     .unwrap();
 
     let ri = Cluster::parse(&el).unwrap();
-    let rs = ClusterSpec::new(&ri, "path").unwrap();
+    let rs = ClusterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.BAR", rs[0].derived_from_path().unwrap());
   }
@@ -1006,7 +1026,7 @@ mod tests {
     .unwrap();
 
     let ri = Cluster::parse(&el).unwrap();
-    let rs = ClusterSpec::new(&ri, "path").unwrap();
+    let rs = ClusterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.BAR_one", rs[0].derived_from_path().unwrap());
     assert_eq!("path.BAR_two", rs[1].derived_from_path().unwrap());
@@ -1043,7 +1063,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let cs = ClusterSpec::new(&ci, "path").unwrap();
+    let cs = ClusterSpec::new(&ci, "path", 0).unwrap();
 
     assert_eq!(1, cs.len());
 
@@ -1088,7 +1108,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let mut cs = ClusterSpec::new(&ci, "path").unwrap();
+    let mut cs = ClusterSpec::new(&ci, "path", 0).unwrap();
 
     assert_eq!(1, cs.len());
 
@@ -1163,7 +1183,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let cs = ClusterSpec::new(&ci, "path").unwrap();
+    let cs = ClusterSpec::new(&ci, "path", 0).unwrap();
 
     assert_eq!(1, cs.len());
 
@@ -1228,7 +1248,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let mut cs = ClusterSpec::new(&ci, "path").unwrap();
+    let mut cs = ClusterSpec::new(&ci, "path", 0).unwrap();
 
     assert_eq!(1, cs.len());
 
@@ -1338,7 +1358,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let mut cs = ClusterSpec::new(&ci, "path").unwrap();
+    let mut cs = ClusterSpec::new(&ci, "path", 0).unwrap();
 
     assert_eq!(1, cs.len());
 
@@ -1377,7 +1397,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let mut cs = ClusterSpec::new(&ci, "path").unwrap();
+    let mut cs = ClusterSpec::new(&ci, "path", 0).unwrap();
     let cluster = &mut cs[0];
 
     let changed = cluster.propagate_default_register_properties(
@@ -1411,7 +1431,7 @@ mod tests {
     .unwrap();
 
     let ci = Cluster::parse(&el).unwrap();
-    let mut cs = ClusterSpec::new(&ci, "path").unwrap();
+    let mut cs = ClusterSpec::new(&ci, "path", 0).unwrap();
     let cluster = &mut cs[0];
 
     let changed = cluster.propagate_default_register_properties(&None, &None, &None, &None);

@@ -4,6 +4,7 @@ use super::AccessSpec;
 use crate::{
   error::{SvdExpanderError, SvdExpanderResult},
   value::{EnumeratedValueSetSpec, ModifiedWriteValuesSpec, WriteConstraintSpec},
+  EnumeratedValueUsageSpec,
 };
 
 /// Describes a field on a register.
@@ -11,6 +12,7 @@ use crate::{
 pub struct FieldSpec {
   preceding_path: String,
   derived_from: Option<String>,
+  base_address: u32,
 
   /// A name that identfies the field. Must be unique within the parent register.
   pub name: String,
@@ -37,9 +39,13 @@ pub struct FieldSpec {
   pub enumerated_value_sets: Vec<EnumeratedValueSetSpec>,
 }
 impl FieldSpec {
-  pub(crate) fn new(f: &Field, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
+  pub(crate) fn new(
+    f: &Field,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match f {
-      Field::Single(ref fi) => vec![Self::from_field_info(fi, preceding_path)?],
+      Field::Single(ref fi) => vec![Self::from_field_info(fi, preceding_path, base_address)?],
       Field::Array(ref fi, ref d) => {
         let dim_indices = if let Some(ref di) = d.dim_index {
           if d.dim != di.len() as u32 {
@@ -53,7 +59,7 @@ impl FieldSpec {
           (0..d.dim).map(|v| v.to_string()).collect()
         };
 
-        let prototype = Self::from_field_info(fi, preceding_path)?;
+        let prototype = Self::from_field_info(fi, preceding_path, base_address)?;
         let mut field_specs = Vec::with_capacity(d.dim as usize);
 
         for (n, dim_index) in dim_indices.iter().enumerate() {
@@ -72,6 +78,82 @@ impl FieldSpec {
     Ok(specs)
   }
 
+  /// Returns the first enumerated value set that allows both reading and writing, if any.
+  pub fn read_write_value_set(&self) -> Option<EnumeratedValueSetSpec> {
+    for set in self.enumerated_value_sets.iter() {
+      if set.usage() == EnumeratedValueUsageSpec::ReadWrite {
+        return Some(set.clone());
+      }
+    }
+    None
+  }
+
+  /// Returns the first enumerated value set that only allows reading, if any.
+  pub fn read_only_value_set(&self) -> Option<EnumeratedValueSetSpec> {
+    for set in self.enumerated_value_sets.iter() {
+      if set.usage() == EnumeratedValueUsageSpec::Read {
+        return Some(set.clone());
+      }
+    }
+    None
+  }
+
+  /// Returns the first readable enumerated value set, if any.
+  pub fn readable_value_set(&self) -> Option<EnumeratedValueSetSpec> {
+    for set in self.enumerated_value_sets.iter() {
+      if set.usage().can_read() {
+        return Some(set.clone());
+      }
+    }
+    None
+  }
+
+  /// Returns the first enumerated value set that only allows writing, if any.
+  pub fn write_only_value_set(&self) -> Option<EnumeratedValueSetSpec> {
+    for set in self.enumerated_value_sets.iter() {
+      if set.usage() == EnumeratedValueUsageSpec::Write {
+        return Some(set.clone());
+      }
+    }
+    None
+  }
+
+  /// Returns the first writable enumerated value set, if any.
+  pub fn writable_value_set(&self) -> Option<EnumeratedValueSetSpec> {
+    for set in self.enumerated_value_sets.iter() {
+      if set.usage().can_write() {
+        return Some(set.clone());
+      }
+    }
+    None
+  }
+
+  /// Whether this field is readable
+  pub fn can_read(&self) -> bool {
+    match self.access {
+      Some(a) => a.can_read(),
+      None => false,
+    }
+  }
+
+  /// Whether this field is writable
+  pub fn can_write(&self) -> bool {
+    match self.access {
+      Some(a) => a.can_write(),
+      None => false,
+    }
+  }
+
+  /// The bit mask for reading/writing this field on the parent register
+  pub fn mask(&self) -> u32 {
+    u32::MAX >> (32 - self.width) << self.offset
+  }
+
+  /// The memory address of this field's parent register
+  pub fn address(&self) -> u32 {
+    self.base_address
+  }
+
   /// The full path to the field that this field inherits from (if any).
   pub fn derived_from_path(&self) -> Option<String> {
     match self.derived_from {
@@ -88,10 +170,11 @@ impl FieldSpec {
     format!("{}.{}", self.preceding_path, self.name)
   }
 
-  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub(crate) fn clone_with_overrides(&self, preceding_path: &str, base_address: u32) -> Self {
     let mut field = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
+      base_address,
       name: self.name.clone(),
       description: self.description.clone(),
       offset: self.offset,
@@ -105,7 +188,7 @@ impl FieldSpec {
     field.enumerated_value_sets = self
       .enumerated_value_sets
       .iter()
-      .map(|s| s.clone_with_preceding_paths(&field.path(), &field.preceding_path))
+      .map(|s| s.clone_with_overridess(&field.path(), &field.preceding_path))
       .collect();
 
     field
@@ -179,10 +262,15 @@ impl FieldSpec {
     Ok(changed)
   }
 
-  fn from_field_info(fi: &FieldInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
+  fn from_field_info(
+    fi: &FieldInfo,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Self> {
     let mut field = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: fi.derived_from.clone(),
+      base_address,
       name: fi.name.clone(),
       description: fi.description.clone(),
       offset: fi.bit_range.offset,
@@ -259,7 +347,7 @@ mod tests {
 
     let fi = Field::parse(&el).unwrap();
 
-    let mut specs = FieldSpec::new(&fi, "").unwrap();
+    let mut specs = FieldSpec::new(&fi, "", 0).unwrap();
 
     assert_eq!(1, specs.len());
 
@@ -301,7 +389,7 @@ mod tests {
 
     let fi = Field::parse(&el).unwrap();
 
-    let mut specs = FieldSpec::new(&fi, "").unwrap();
+    let mut specs = FieldSpec::new(&fi, "", 0).unwrap();
 
     assert_eq!(3, specs.len());
 
@@ -345,7 +433,7 @@ mod tests {
     .unwrap();
 
     let descendant_fi = Field::parse(&descendant_el).unwrap();
-    let mut descendant_specs = FieldSpec::new(&descendant_fi, "").unwrap();
+    let mut descendant_specs = FieldSpec::new(&descendant_fi, "", 0).unwrap();
     let mut descendant_fs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -370,7 +458,7 @@ mod tests {
     .unwrap();
 
     let ancestor_fi = Field::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = FieldSpec::new(&ancestor_fi, "").unwrap();
+    let mut ancestor_specs = FieldSpec::new(&ancestor_fi, "", 0).unwrap();
     let ancestor_fs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_fs.inherit_from(&ancestor_fs);
@@ -412,7 +500,7 @@ mod tests {
     .unwrap();
 
     let descendant_fi = Field::parse(&descendant_el).unwrap();
-    let mut descendant_specs = FieldSpec::new(&descendant_fi, "").unwrap();
+    let mut descendant_specs = FieldSpec::new(&descendant_fi, "", 0).unwrap();
     let mut descendant_fs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -430,7 +518,7 @@ mod tests {
     .unwrap();
 
     let ancestor_fi = Field::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = FieldSpec::new(&ancestor_fi, "").unwrap();
+    let mut ancestor_specs = FieldSpec::new(&ancestor_fi, "", 0).unwrap();
     let ancestor_fs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_fs.inherit_from(&ancestor_fs);
@@ -459,7 +547,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let fs = FieldSpec::new(&fi, "path").unwrap();
+    let fs = FieldSpec::new(&fi, "path", 0).unwrap();
 
     assert_eq!("path.FOO", fs[0].path());
   }
@@ -482,7 +570,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let fs = FieldSpec::new(&fi, "path").unwrap();
+    let fs = FieldSpec::new(&fi, "path", 0).unwrap();
 
     assert_eq!("path.FOO_one", fs[0].path());
     assert_eq!("path.FOO_two", fs[1].path());
@@ -504,7 +592,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let fs = FieldSpec::new(&fi, "path").unwrap();
+    let fs = FieldSpec::new(&fi, "path", 0).unwrap();
 
     assert_eq!("path.BAR", fs[0].derived_from_path().unwrap());
   }
@@ -527,7 +615,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let fs = FieldSpec::new(&fi, "path").unwrap();
+    let fs = FieldSpec::new(&fi, "path", 0).unwrap();
 
     assert_eq!("path.BAR_one", fs[0].derived_from_path().unwrap());
     assert_eq!("path.BAR_two", fs[1].derived_from_path().unwrap());
@@ -549,7 +637,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let mut fs = FieldSpec::new(&fi, "path").unwrap();
+    let mut fs = FieldSpec::new(&fi, "path", 0).unwrap();
     let field = &mut fs[0];
 
     let changed = field.propagate_default_properties(
@@ -588,7 +676,7 @@ mod tests {
     .unwrap();
 
     let fi = Field::parse(&el).unwrap();
-    let mut fs = FieldSpec::new(&fi, "path").unwrap();
+    let mut fs = FieldSpec::new(&fi, "path", 0).unwrap();
     let field = &mut fs[0];
 
     let changed = field.propagate_default_properties(&None, &None, &None);

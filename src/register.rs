@@ -13,6 +13,7 @@ use crate::{
 pub struct RegisterSpec {
   preceding_path: String,
   derived_from: Option<String>,
+  base_address: u32,
 
   /// Name that identifies the register. Must be unique within the scope of its parent.
   pub name: String,
@@ -46,9 +47,13 @@ pub struct RegisterSpec {
   pub default_field_modified_write_values: Option<ModifiedWriteValuesSpec>,
 }
 impl RegisterSpec {
-  pub(crate) fn new(r: &Register, preceding_path: &str) -> SvdExpanderResult<Vec<Self>> {
+  pub(crate) fn new(
+    r: &Register,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Vec<Self>> {
     let specs: Vec<Self> = match r {
-      Register::Single(ref ri) => vec![Self::from_register_info(ri, preceding_path)?],
+      Register::Single(ref ri) => vec![Self::from_register_info(ri, preceding_path, base_address)?],
       Register::Array(ref fi, ref d) => {
         let dim_indices = if let Some(ref di) = d.dim_index {
           if d.dim != di.len() as u32 {
@@ -62,7 +67,7 @@ impl RegisterSpec {
           (0..d.dim).map(|v| v.to_string()).collect()
         };
 
-        let prototype = Self::from_register_info(fi, preceding_path)?;
+        let prototype = Self::from_register_info(fi, preceding_path, base_address)?;
         let mut register_specs = Vec::with_capacity(d.dim as usize);
 
         for (n, dim_index) in dim_indices.iter().enumerate() {
@@ -79,6 +84,11 @@ impl RegisterSpec {
     };
 
     Ok(specs)
+  }
+
+  /// The memory address of this register
+  pub fn address(&self) -> u32 {
+    self.base_address + self.address_offset
   }
 
   /// The full path to the register that this register inherits from (if any).
@@ -109,10 +119,11 @@ impl RegisterSpec {
     )
   }
 
-  pub(crate) fn clone_with_preceding_path(&self, preceding_path: &str) -> Self {
+  pub(crate) fn clone_with_overrides(&self, preceding_path: &str, base_address: u32) -> Self {
     let mut register = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: None,
+      base_address,
       name: self.name.clone(),
       description: self.description.clone(),
       address_offset: self.address_offset,
@@ -128,7 +139,7 @@ impl RegisterSpec {
     register.fields = self
       .fields
       .iter()
-      .map(|f| f.clone_with_preceding_path(&register.path()))
+      .map(|f| f.clone_with_overrides(&register.path(), register.address()))
       .collect();
 
     register
@@ -183,7 +194,7 @@ impl RegisterSpec {
       } else {
         self
           .fields
-          .push(ancestor.clone_with_preceding_path(&self.path()));
+          .push(ancestor.clone_with_overrides(&self.path(), self.address()));
         changed = true;
       }
     }
@@ -265,10 +276,15 @@ impl RegisterSpec {
     Ok(changed)
   }
 
-  fn from_register_info(ri: &RegisterInfo, preceding_path: &str) -> SvdExpanderResult<Self> {
+  fn from_register_info(
+    ri: &RegisterInfo,
+    preceding_path: &str,
+    base_address: u32,
+  ) -> SvdExpanderResult<Self> {
     let mut register = Self {
       preceding_path: preceding_path.to_owned(),
       derived_from: ri.derived_from.clone(),
+      base_address,
       name: ri.name.clone(),
       description: ri.description.clone(),
       address_offset: ri.address_offset,
@@ -295,7 +311,7 @@ impl RegisterSpec {
 
       if let Some(ref fields) = ri.fields {
         for f in fields.iter() {
-          field_specs.extend(FieldSpec::new(f, &register.path())?);
+          field_specs.extend(FieldSpec::new(f, &register.path(), register.address())?);
         }
       }
 
@@ -368,7 +384,7 @@ mod tests {
 
     let ri = Register::parse(&el).unwrap();
 
-    let mut specs = RegisterSpec::new(&ri, "").unwrap();
+    let mut specs = RegisterSpec::new(&ri, "", 0).unwrap();
 
     assert_eq!(1, specs.len());
 
@@ -430,7 +446,7 @@ mod tests {
 
     let ri = Register::parse(&el).unwrap();
 
-    let mut specs = RegisterSpec::new(&ri, "").unwrap();
+    let mut specs = RegisterSpec::new(&ri, "", 0).unwrap();
 
     assert_eq!(3, specs.len());
 
@@ -509,7 +525,7 @@ mod tests {
     .unwrap();
 
     let descendant_ri = Register::parse(&descendant_el).unwrap();
-    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "").unwrap();
+    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "", 0).unwrap();
     let mut descendant_rs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -559,7 +575,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ri = Register::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "").unwrap();
+    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "", 0).unwrap();
     let ancestor_rs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_rs.inherit_from(&ancestor_rs);
@@ -655,7 +671,7 @@ mod tests {
     .unwrap();
 
     let descendant_ri = Register::parse(&descendant_el).unwrap();
-    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "").unwrap();
+    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "", 0).unwrap();
     let mut descendant_rs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -675,7 +691,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ri = Register::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "").unwrap();
+    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "", 0).unwrap();
     let ancestor_rs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_rs.inherit_from(&ancestor_rs);
@@ -713,7 +729,7 @@ mod tests {
     .unwrap();
 
     let descendant_ri = Register::parse(&descendant_el).unwrap();
-    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "").unwrap();
+    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "", 0).unwrap();
     let mut descendant_rs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -736,7 +752,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ri = Register::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "").unwrap();
+    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "", 0).unwrap();
     let ancestor_rs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_rs.inherit_from(&ancestor_rs);
@@ -766,7 +782,7 @@ mod tests {
     .unwrap();
 
     let descendant_ri = Register::parse(&descendant_el).unwrap();
-    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "").unwrap();
+    let mut descendant_specs = RegisterSpec::new(&descendant_ri, "", 0).unwrap();
     let mut descendant_rs = descendant_specs.pop().unwrap();
 
     let ancestor_el: Element = Element::parse(
@@ -788,7 +804,7 @@ mod tests {
     .unwrap();
 
     let ancestor_ri = Register::parse(&ancestor_el).unwrap();
-    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "").unwrap();
+    let mut ancestor_specs = RegisterSpec::new(&ancestor_ri, "", 0).unwrap();
     let ancestor_rs = ancestor_specs.pop().unwrap();
 
     let changed = descendant_rs.inherit_from(&ancestor_rs);
@@ -811,7 +827,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let rs = RegisterSpec::new(&ri, "path").unwrap();
+    let rs = RegisterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.FOO", rs[0].path());
   }
@@ -833,7 +849,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let rs = RegisterSpec::new(&ri, "path").unwrap();
+    let rs = RegisterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.FOO_one", rs[0].path());
     assert_eq!("path.FOO_two", rs[1].path());
@@ -854,7 +870,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let rs = RegisterSpec::new(&ri, "path").unwrap();
+    let rs = RegisterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.BAR", rs[0].derived_from_path().unwrap());
   }
@@ -876,7 +892,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let rs = RegisterSpec::new(&ri, "path").unwrap();
+    let rs = RegisterSpec::new(&ri, "path", 0).unwrap();
 
     assert_eq!("path.BAR_one", rs[0].derived_from_path().unwrap());
     assert_eq!("path.BAR_two", rs[1].derived_from_path().unwrap());
@@ -909,7 +925,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let mut rs = RegisterSpec::new(&ri, "path").unwrap();
+    let mut rs = RegisterSpec::new(&ri, "path", 0).unwrap();
 
     let top = &mut rs[0];
     let count = RefCell::new(0);
@@ -941,7 +957,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let mut rs = RegisterSpec::new(&ri, "path").unwrap();
+    let mut rs = RegisterSpec::new(&ri, "path", 0).unwrap();
     let register = &mut rs[0];
 
     let changed = register.propagate_default_properties(
@@ -972,7 +988,7 @@ mod tests {
     .unwrap();
 
     let ri = Register::parse(&el).unwrap();
-    let mut rs = RegisterSpec::new(&ri, "path").unwrap();
+    let mut rs = RegisterSpec::new(&ri, "path", 0).unwrap();
     let register = &mut rs[0];
 
     let changed = register.propagate_default_properties(&None, &None, &None, &None);

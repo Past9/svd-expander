@@ -130,6 +130,24 @@ impl EnumeratedValueUsageSpec {
       Usage::ReadWrite => EnumeratedValueUsageSpec::ReadWrite,
     }
   }
+
+  /// Whether this usage allows reading the enumerated values from the field
+  pub fn can_read(&self) -> bool {
+    match self {
+      EnumeratedValueUsageSpec::Read => true,
+      EnumeratedValueUsageSpec::ReadWrite => true,
+      _ => false,
+    }
+  }
+
+  /// Whether this usage allows writing the enumerated values to the field
+  pub fn can_write(&self) -> bool {
+    match self {
+      EnumeratedValueUsageSpec::Write => true,
+      EnumeratedValueUsageSpec::ReadWrite => true,
+      _ => false,
+    }
+  }
 }
 
 /// A set of values that can be written to and/or read from a field.
@@ -171,6 +189,15 @@ impl EnumeratedValueSetSpec {
     })
   }
 
+  /// Gets the value of the `usage` property if it's `Some(_)`, and
+  /// defaults to `EnumeratedValueUsageSpec::ReadWrite` if it's `None`.
+  pub fn usage(&self) -> EnumeratedValueUsageSpec {
+    match self.usage {
+      Some(ref u) => u.clone(),
+      None => EnumeratedValueUsageSpec::ReadWrite,
+    }
+  }
+
   /// The full path to the enumerated value set that this set inherits from (if any).
   pub(crate) fn derived_from_path(&self) -> SvdExpanderResult<Option<String>> {
     match self.derived_from {
@@ -195,11 +222,7 @@ impl EnumeratedValueSetSpec {
     }
   }
 
-  pub(crate) fn clone_with_preceding_paths(
-    &self,
-    preceding_path: &str,
-    register_path: &str,
-  ) -> Self {
+  pub(crate) fn clone_with_overridess(&self, preceding_path: &str, register_path: &str) -> Self {
     Self {
       preceding_path: preceding_path.to_owned(),
       register_path: register_path.to_owned(),

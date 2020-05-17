@@ -279,7 +279,10 @@ impl DeviceSpec {
   /// # Arguments
   ///
   /// * `path` = The path to the enumerated value set.
-  pub (crate) fn get_enumerated_value_set(&self, path: &str) -> SvdExpanderResult<&EnumeratedValueSetSpec> {
+  pub(crate) fn get_enumerated_value_set(
+    &self,
+    path: &str,
+  ) -> SvdExpanderResult<&EnumeratedValueSetSpec> {
     let set = self.iter_enumerated_value_sets().find(|s| match s.path() {
       Some(ref p) => p == path,
       None => false,
