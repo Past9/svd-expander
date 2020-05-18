@@ -282,6 +282,30 @@ impl EnumeratedValueSpec {
     }
   }
 
+  /// Whether this value's `value` property ultimately resolves to
+  /// an actual `u32` value instead of a default.
+  pub fn has_actual_value(&self) -> bool {
+    match self.value {
+      Some(ref v) => match v {
+        EnumeratedValueValueSpec::Value(_) => true,
+        EnumeratedValueValueSpec::Default => false,
+      },
+      None => false,
+    }
+  }
+
+  /// Gets the actual `u32` value that this value's `value` property
+  /// ultimately resolves to, if any, or panics if it resolves to a default.
+  pub fn expect_actual_value(&self) -> u32 {
+    match self.value {
+      Some(ref v) => match v {
+        EnumeratedValueValueSpec::Value(ref n) => *n,
+        EnumeratedValueValueSpec::Default => panic!("Expected value where none exists."),
+      },
+      None => panic!("Expected value where none exists."),
+    }
+  }
+
   pub(crate) fn inherit_from(&mut self, vs: &EnumeratedValueSpec) -> bool {
     let mut changed = false;
 
@@ -308,4 +332,30 @@ pub enum EnumeratedValueValueSpec {
 
   /// This value is a catch-all for any other values that are not explicitly listed.
   Default,
+}
+impl EnumeratedValueValueSpec {
+  /// Whether this object has a non-default value.
+  pub fn has_value(&self) -> bool {
+    match self {
+      EnumeratedValueValueSpec::Value(_) => true,
+      EnumeratedValueValueSpec::Default => false,
+    }
+  }
+
+  /// Returns the non-default value, if any, or panics
+  /// if it's a default.
+  pub fn unwrap_value(&self) -> u32 {
+    match self {
+      EnumeratedValueValueSpec::Value(n) => n.clone(),
+      EnumeratedValueValueSpec::Default => panic!("EnumeratedValueValueSpec has no value"),
+    }
+  }
+
+  /// Whether this object represents a default.
+  pub fn is_default(&self) -> bool {
+    match self {
+      EnumeratedValueValueSpec::Value(_) => false,
+      EnumeratedValueValueSpec::Default => true,
+    }
+  }
 }
