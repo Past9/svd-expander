@@ -132,7 +132,7 @@ impl FieldSpec {
   pub fn can_read(&self) -> bool {
     match self.access {
       Some(a) => a.can_read(),
-      None => false,
+      None => true, // Default access is read-write
     }
   }
 
@@ -140,7 +140,7 @@ impl FieldSpec {
   pub fn can_write(&self) -> bool {
     match self.access {
       Some(a) => a.can_write(),
-      None => false,
+      None => true, // Default access is read-write
     }
   }
 
