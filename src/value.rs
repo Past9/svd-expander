@@ -1,4 +1,4 @@
-use crate::{SvdExpanderError, SvdExpanderResult};
+use crate::{clean_whitespace_opt, SvdExpanderError, SvdExpanderResult};
 use svd_parser::{
   writeconstraint::WriteConstraintRange, EnumeratedValue, EnumeratedValues, ModifiedWriteValues,
   Usage, WriteConstraint,
@@ -185,7 +185,7 @@ impl EnumeratedValueSetSpec {
         .values
         .iter()
         .map(|v| EnumeratedValueSpec::new(&v))
-        .collect(),
+        .collect::<SvdExpanderResult<Vec<EnumeratedValueSpec>>>()?,
     })
   }
 
@@ -269,17 +269,17 @@ pub struct EnumeratedValueSpec {
   pub value: Option<EnumeratedValueValueSpec>,
 }
 impl EnumeratedValueSpec {
-  pub(crate) fn new(ev: &EnumeratedValue) -> Self {
-    Self {
+  pub(crate) fn new(ev: &EnumeratedValue) -> SvdExpanderResult<Self> {
+    Ok(Self {
       name: ev.name.clone(),
-      description: ev.description.clone(),
+      description: clean_whitespace_opt(ev.description.clone())?,
       value: match (ev.value, ev.is_default) {
         (Some(v), _) => Some(EnumeratedValueValueSpec::Value(v)),
         (None, Some(true)) => Some(EnumeratedValueValueSpec::Default),
         (None, None) => None,
         (None, Some(false)) => None,
       },
-    }
+    })
   }
 
   /// Whether this value's `value` property ultimately resolves to

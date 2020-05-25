@@ -42,3 +42,8 @@ impl From<AnyhowError> for SvdExpanderError {
     SvdExpanderError::new(&format!("anyhow::Error {:?}", err))
   }
 }
+impl From<regex::Error> for SvdExpanderError {
+  fn from(err: regex::Error) -> Self {
+    SvdExpanderError::new(&format!("anyhow::Error {:?}", err))
+  }
+}

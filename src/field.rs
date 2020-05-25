@@ -2,6 +2,7 @@ use svd_parser::{Field, FieldInfo};
 
 use super::AccessSpec;
 use crate::{
+  clean_whitespace_opt,
   error::{SvdExpanderError, SvdExpanderResult},
   value::{EnumeratedValueSetSpec, ModifiedWriteValuesSpec, WriteConstraintSpec},
   EnumeratedValueUsageSpec,
@@ -272,7 +273,7 @@ impl FieldSpec {
       derived_from: fi.derived_from.clone(),
       base_address,
       name: fi.name.clone(),
-      description: fi.description.clone(),
+      description: clean_whitespace_opt(fi.description.clone())?,
       offset: fi.bit_range.offset,
       width: fi.bit_range.width,
       access: match fi.access {

@@ -3,6 +3,7 @@ use svd_parser::{Cluster, ClusterInfo, RegisterCluster};
 use super::register::RegisterSpec;
 use super::{AccessSpec, FieldSpec};
 use crate::{
+  clean_whitespace_opt,
   error::{SvdExpanderError, SvdExpanderResult},
   value::EnumeratedValueSetSpec,
 };
@@ -382,7 +383,7 @@ impl ClusterSpec {
       derived_from: ci.derived_from.clone(),
       base_address,
       name: ci.name.clone(),
-      description: ci.description.clone(),
+      description: clean_whitespace_opt(ci.description.clone())?,
       address_offset: ci.address_offset,
       default_register_size: ci.default_register_properties.size.clone(),
       default_register_reset_value: ci.default_register_properties.reset_value.clone(),

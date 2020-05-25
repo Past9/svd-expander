@@ -1,5 +1,6 @@
 use super::{peripheral::PeripheralSpec, AccessSpec, ClusterSpec, FieldSpec, RegisterSpec};
 use crate::{
+  clean_whitespace_opt,
   error::{SvdExpanderError, SvdExpanderResult},
   value::EnumeratedValueSetSpec,
 };
@@ -152,7 +153,7 @@ impl DeviceSpec {
     let mut device = Self {
       name: d.name.clone(),
       version: d.version.clone(),
-      description: d.description.clone(),
+      description: clean_whitespace_opt(d.description.clone())?,
       address_unit_bits: d.address_unit_bits.clone(),
       width: d.width.clone(),
       cpu: match d.cpu {

@@ -85,6 +85,7 @@
 //! This crate is intended for use in code generators. It is under active development and bug
 //! reports and feature requests are welcome.
 
+use regex::Regex;
 use svd_parser::Access;
 
 mod cluster;
@@ -105,6 +106,18 @@ pub use value::{
   EnumeratedValueSetSpec, EnumeratedValueSpec, EnumeratedValueUsageSpec, EnumeratedValueValueSpec,
   ModifiedWriteValuesSpec, WriteConstraintRangeSpec, WriteConstraintSpec,
 };
+
+pub(crate) fn clean_whitespace(text: String) -> SvdExpanderResult<String> {
+  let rx = Regex::new(r"\s+")?;
+  Ok(rx.replace_all(text.trim(), " ").into_owned())
+}
+
+pub(crate) fn clean_whitespace_opt(text: Option<String>) -> SvdExpanderResult<Option<String>> {
+  match text {
+    Some(t) => Ok(Some(clean_whitespace(t)?)),
+    None => Ok(None),
+  }
+}
 
 /// Defines access rights for fields on the device, though it may be specified at a
 /// higher level than individual fields.
@@ -165,5 +178,31 @@ impl AccessSpec {
       | AccessSpec::WriteOnly => true,
       _ => false,
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::clean_whitespace;
+
+  #[test]
+  fn reduces_whitespace_to_single_spaces() {
+    let txt = r##"
+    
+          Now  is    the
+      time for
+
+
+      all
+      good      men
+      to come to the aid of their country.
+
+    "##
+      .to_owned();
+
+    assert_eq!(
+      "Now is the time for all good men to come to the aid of their country.",
+      clean_whitespace(txt).unwrap()
+    );
   }
 }

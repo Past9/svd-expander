@@ -3,6 +3,7 @@ use svd_parser::{Register, RegisterInfo};
 use super::field::FieldSpec;
 use super::AccessSpec;
 use crate::{
+  clean_whitespace_opt,
   error::{SvdExpanderError, SvdExpanderResult},
   value::{EnumeratedValueSetSpec, ModifiedWriteValuesSpec, WriteConstraintSpec},
 };
@@ -286,7 +287,7 @@ impl RegisterSpec {
       derived_from: ri.derived_from.clone(),
       base_address,
       name: ri.name.clone(),
-      description: ri.description.clone(),
+      description: clean_whitespace_opt(ri.description.clone())?,
       address_offset: ri.address_offset,
       size: ri.size.clone(),
       reset_value: ri.reset_value.clone(),

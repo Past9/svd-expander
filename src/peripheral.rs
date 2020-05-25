@@ -1,5 +1,5 @@
 use super::{cluster::ClusterSpec, register::RegisterSpec, AccessSpec, FieldSpec};
-use crate::{error::SvdExpanderResult, value::EnumeratedValueSetSpec};
+use crate::{clean_whitespace_opt, error::SvdExpanderResult, value::EnumeratedValueSetSpec};
 use svd_parser::{AddressBlock, Interrupt, Peripheral, RegisterCluster};
 
 /// Describes an address range uniquely mapped to a peripheral.
@@ -41,12 +41,12 @@ pub struct InterruptSpec {
   pub value: u32,
 }
 impl InterruptSpec {
-  pub(crate) fn new(is: &Interrupt) -> Self {
-    Self {
+  pub(crate) fn new(is: &Interrupt) -> SvdExpanderResult<Self> {
+    Ok(Self {
       name: is.name.clone(),
-      description: is.description.clone(),
+      description: clean_whitespace_opt(is.description.clone())?,
       value: is.value,
-    }
+    })
   }
 
   pub(crate) fn inherit_from(&mut self, is: &InterruptSpec) -> bool {
@@ -119,7 +119,7 @@ impl PeripheralSpec {
       version: p.version.clone(),
       display_name: p.display_name.clone(),
       group_name: p.group_name.clone(),
-      description: p.description.clone(),
+      description: clean_whitespace_opt(p.description.clone())?,
       base_address: p.base_address,
       address_block: match p.address_block {
         Some(ref ab) => Some(AddressBlockSpec::new(ab)),
@@ -132,7 +132,11 @@ impl PeripheralSpec {
         Some(ref a) => Some(AccessSpec::new(a)),
         None => None,
       },
-      interrupts: p.interrupt.iter().map(|i| InterruptSpec::new(i)).collect(),
+      interrupts: p
+        .interrupt
+        .iter()
+        .map(|i| InterruptSpec::new(i))
+        .collect::<SvdExpanderResult<Vec<InterruptSpec>>>()?,
       registers: Vec::with_capacity(0),
       clusters: Vec::with_capacity(0),
     };
