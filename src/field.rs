@@ -171,6 +171,10 @@ impl FieldSpec {
     format!("{}.{}", self.preceding_path, self.name)
   }
 
+  pub fn parent_path(&self) -> String {
+    self.preceding_path.clone()
+  }
+
   pub(crate) fn clone_with_overrides(&self, preceding_path: &str, base_address: u32) -> Self {
     let mut field = Self {
       preceding_path: preceding_path.to_owned(),

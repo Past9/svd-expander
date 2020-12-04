@@ -282,6 +282,16 @@ impl EnumeratedValueSpec {
     })
   }
 
+  pub fn actual_value(&self) -> Option<u32> {
+    match self.value {
+      Some(ref v) => match v {
+        EnumeratedValueValueSpec::Value(ref n) => Some(*n),
+        EnumeratedValueValueSpec::Default => None,
+      },
+      None => None,
+    }
+  }
+
   /// Whether this value's `value` property ultimately resolves to
   /// an actual `u32` value instead of a default.
   pub fn has_actual_value(&self) -> bool {
