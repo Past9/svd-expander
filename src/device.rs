@@ -221,7 +221,11 @@ impl DeviceSpec {
   /// * `path` = The path to the peripheral. Since peripherals are top-level
   /// components and can't be nested, this is just the name of the peripheral.
   pub fn get_peripheral(&self, path: &str) -> SvdExpanderResult<&PeripheralSpec> {
-    match self.peripherals.iter().find(|p| p.path() == path) {
+    match self
+      .peripherals
+      .iter()
+      .find(|p| p.path().to_lowercase() == path.to_lowercase())
+    {
       Some(p) => Ok(p),
       None => Err(SvdExpanderError::new(&format!(
         "No peripheral at path '{}'",
@@ -236,7 +240,10 @@ impl DeviceSpec {
   ///
   /// * `path` = The path to the register cluster.
   pub fn get_cluster(&self, path: &str) -> SvdExpanderResult<&ClusterSpec> {
-    match self.iter_clusters().find(|c| c.path() == path) {
+    match self
+      .iter_clusters()
+      .find(|c| c.path().to_lowercase() == path.to_lowercase())
+    {
       Some(c) => Ok(c),
       None => Err(SvdExpanderError::new(&format!(
         "No cluster at path '{}'",
@@ -251,7 +258,10 @@ impl DeviceSpec {
   ///
   /// * `path` = The path to the register.
   pub fn get_register(&self, path: &str) -> SvdExpanderResult<&RegisterSpec> {
-    match self.iter_registers().find(|r| r.path() == path) {
+    match self
+      .iter_registers()
+      .find(|r| r.path().to_lowercase() == path.to_lowercase())
+    {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
         "No register at path '{}'",
@@ -266,7 +276,10 @@ impl DeviceSpec {
   ///
   /// * `path` = The path to the register field.
   pub fn get_field(&self, path: &str) -> SvdExpanderResult<&FieldSpec> {
-    match self.iter_fields().find(|f| f.path() == path) {
+    match self
+      .iter_fields()
+      .find(|f| f.path().to_lowercase() == path.to_lowercase())
+    {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
         "No field at path '{}'",
