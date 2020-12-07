@@ -1,3 +1,5 @@
+use std::fs;
+
 use super::{peripheral::PeripheralSpec, AccessSpec, ClusterSpec, FieldSpec, RegisterSpec};
 use crate::{
   clean_whitespace_opt,
@@ -149,6 +151,10 @@ impl DeviceSpec {
     Ok(Self::new(&svd_parser::parse(xml)?)?)
   }
 
+  pub fn from_file<S: Into<String>>(path: S) -> SvdExpanderResult<Self> {
+    Self::from_xml(&fs::read_to_string(&path.into())?)
+  }
+
   pub(crate) fn new(d: &Device) -> SvdExpanderResult<Self> {
     let mut device = Self {
       name: d.name.clone(),
@@ -276,16 +282,19 @@ impl DeviceSpec {
   ///
   /// * `path` = The path to the register field.
   pub fn get_field(&self, path: &str) -> SvdExpanderResult<&FieldSpec> {
-    match self
-      .iter_fields()
-      .find(|f| f.path().to_lowercase() == path.to_lowercase())
-    {
+    match self.try_get_field(path) {
       Some(r) => Ok(r),
       None => Err(SvdExpanderError::new(&format!(
         "No field at path '{}'",
         path
       ))),
     }
+  }
+
+  pub fn try_get_field(&self, path: &str) -> Option<&FieldSpec> {
+    self
+      .iter_fields()
+      .find(|f| f.path().to_lowercase() == path.to_lowercase())
   }
 
   /// Gets the enumerated value set that exists at the given path.
