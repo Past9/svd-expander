@@ -291,6 +291,11 @@ impl DeviceSpec {
     }
   }
 
+  /// Tries to get the register field that exists at the given path.
+  ///
+  /// # Arguments
+  ///
+  /// * `path` = The path to the register field.
   pub fn try_get_field(&self, path: &str) -> Option<&FieldSpec> {
     self
       .iter_fields()
