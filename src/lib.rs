@@ -85,6 +85,8 @@
 //! This crate is intended for use in code generators. It is under active development and bug
 //! reports and feature requests are welcome.
 
+use std::fmt::{Debug, Display};
+
 use regex::Regex;
 use svd_parser::Access;
 
@@ -178,6 +180,50 @@ impl AccessSpec {
       | AccessSpec::WriteOnly => true,
       _ => false,
     }
+  }
+}
+
+#[derive(Eq, PartialEq, Clone)]
+pub struct RefPath {
+  crumbs: Vec<String>,
+}
+impl RefPath {
+  pub fn parse<S: Into<String>>(path: S) -> Self {
+    Self {
+      crumbs: path.into().split(".").map(|s| s.to_owned()).collect(),
+    }
+  }
+
+  pub fn empty() -> Self {
+    Self { crumbs: Vec::new() }
+  }
+
+  pub fn add<S: Into<String>>(&self, crumb: S) -> Self {
+    let mut out = self.clone();
+    out.crumbs.push(crumb.into());
+    out
+  }
+
+  pub fn back(&self) -> Self {
+    let mut out = self.clone();
+    out.crumbs.pop();
+    out
+  }
+
+  pub fn to_string(&self) -> String {
+    self.crumbs.join(".")
+  }
+}
+impl Display for RefPath {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&self.to_string())?;
+    Ok(())
+  }
+}
+impl Debug for RefPath {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&self.to_string())?;
+    Ok(())
   }
 }
 
