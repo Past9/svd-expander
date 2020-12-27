@@ -237,6 +237,8 @@ impl RegisterSpec {
         &self.access,
         &self.default_field_write_constraint,
         &self.default_field_modified_write_values,
+        &self.reset_mask,
+        &self.reset_value,
       ) {
         changed = true;
       }

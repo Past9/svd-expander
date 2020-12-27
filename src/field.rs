@@ -38,6 +38,10 @@ pub struct FieldSpec {
   pub modified_write_values: Option<ModifiedWriteValuesSpec>,
 
   pub enumerated_value_sets: Vec<EnumeratedValueSetSpec>,
+
+  pub reset_value: Option<u32>,
+
+  pub reset_mask: Option<u32>,
 }
 impl FieldSpec {
   pub(crate) fn new(
@@ -188,6 +192,8 @@ impl FieldSpec {
       write_constraint: self.write_constraint.clone(),
       modified_write_values: self.modified_write_values.clone(),
       enumerated_value_sets: Vec::new(),
+      reset_value: None,
+      reset_mask: None,
     };
 
     field.enumerated_value_sets = self
@@ -230,6 +236,8 @@ impl FieldSpec {
     access: &Option<AccessSpec>,
     write_constraint: &Option<WriteConstraintSpec>,
     modified_write_values: &Option<ModifiedWriteValuesSpec>,
+    register_reset_mask: &Option<u32>,
+    register_reset_value: &Option<u32>,
   ) -> bool {
     let mut changed = false;
 
@@ -247,6 +255,22 @@ impl FieldSpec {
       self.modified_write_values = modified_write_values.clone();
       changed = true;
     }
+
+    match (self.reset_mask, register_reset_mask) {
+      (None, Some(rrm)) => {
+        self.reset_mask = Some((rrm & self.mask()) >> self.offset);
+        changed = true;
+      }
+      _ => {}
+    };
+
+    match (self.reset_value, register_reset_value) {
+      (None, Some(rrv)) => {
+        self.reset_value = Some((rrv & self.mask()) >> self.offset);
+        changed = true;
+      }
+      _ => {}
+    };
 
     changed
   }
@@ -293,6 +317,8 @@ impl FieldSpec {
         None => None,
       },
       enumerated_value_sets: Vec::new(),
+      reset_value: None,
+      reset_mask: None,
     };
 
     field.enumerated_value_sets = fi
@@ -634,7 +660,7 @@ mod tests {
       <field>
         <name>FOO</name>
         <bitOffset>2</bitOffset>
-        <bitWidth>1</bitWidth>
+        <bitWidth>3</bitWidth>
       </field>
       "##
         .as_bytes(),
@@ -652,6 +678,8 @@ mod tests {
         max: 4,
       })),
       &Some(ModifiedWriteValuesSpec::ZeroToToggle),
+      &Some(u32::MAX),
+      &Some(1 << 3),
     );
 
     assert!(changed);
@@ -664,6 +692,8 @@ mod tests {
       ModifiedWriteValuesSpec::ZeroToToggle,
       field.modified_write_values.clone().unwrap()
     );
+    assert_eq!(0b111, field.reset_mask.clone().unwrap());
+    assert_eq!(0b10, field.reset_value.clone().unwrap());
   }
 
   #[test]
@@ -673,7 +703,7 @@ mod tests {
       <field>
         <name>FOO</name>
         <bitOffset>2</bitOffset>
-        <bitWidth>1</bitWidth>
+        <bitWidth>3</bitWidth>
       </field>
       "##
         .as_bytes(),
@@ -682,9 +712,12 @@ mod tests {
 
     let fi = Field::parse(&el).unwrap();
     let mut fs = FieldSpec::new(&fi, "path", 0).unwrap();
-    let field = &mut fs[0];
+    let mut field = &mut fs[0];
+    field.reset_mask = Some(0b111);
+    field.reset_value = Some(0b10);
 
-    let changed = field.propagate_default_properties(&None, &None, &None);
+    let changed =
+      field.propagate_default_properties(&None, &None, &None, &Some(u32::MAX), &Some(1 << 4));
 
     assert!(!changed);
     assert!(field.access.is_none());
