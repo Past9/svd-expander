@@ -258,7 +258,7 @@ impl FieldSpec {
 
     match (self.reset_mask, register_reset_mask) {
       (None, Some(rrm)) => {
-        self.reset_mask = Some((rrm & self.mask()) >> self.offset);
+        self.reset_mask = Some(rrm & self.mask());
         changed = true;
       }
       _ => {}
@@ -692,7 +692,7 @@ mod tests {
       ModifiedWriteValuesSpec::ZeroToToggle,
       field.modified_write_values.clone().unwrap()
     );
-    assert_eq!(0b111, field.reset_mask.clone().unwrap());
+    assert_eq!(0b11100, field.reset_mask.clone().unwrap());
     assert_eq!(0b10, field.reset_value.clone().unwrap());
   }
 
@@ -713,7 +713,7 @@ mod tests {
     let fi = Field::parse(&el).unwrap();
     let mut fs = FieldSpec::new(&fi, "path", 0).unwrap();
     let mut field = &mut fs[0];
-    field.reset_mask = Some(0b111);
+    field.reset_mask = Some(0b11100);
     field.reset_value = Some(0b10);
 
     let changed =
@@ -723,5 +723,7 @@ mod tests {
     assert!(field.access.is_none());
     assert!(field.write_constraint.is_none());
     assert!(field.modified_write_values.is_none());
+    assert!(field.reset_mask.is_some());
+    assert!(field.reset_value.is_some());
   }
 }
