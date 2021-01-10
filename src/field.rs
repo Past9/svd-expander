@@ -11,9 +11,9 @@ use crate::{
 /// Describes a field on a register.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldSpec {
-  preceding_path: String,
+  pub(super) preceding_path: String,
   derived_from: Option<String>,
-  base_address: u32,
+  pub(super) base_address: u32,
 
   /// A name that identfies the field. Must be unique within the parent register.
   pub name: String,

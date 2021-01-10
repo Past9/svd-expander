@@ -336,6 +336,16 @@ impl RegisterSpec {
     }
 
     self.address_offset = address_offset;
+
+    let self_address = self.address();
+    for field in self.fields.iter_mut() {
+      field.base_address = self_address;
+    }
+
+    let self_path = self.path();
+    for field in self.fields.iter_mut() {
+      field.preceding_path = self_path.clone();
+    }
   }
 }
 
