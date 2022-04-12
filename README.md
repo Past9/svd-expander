@@ -87,5 +87,5 @@ fn main() {
 }
 ```
 
-This crate is intended for use in code generators. It is under active development and bug
-reports and feature requests are welcome.
+This crate is intended for use in code generators. It is not under active development, but bug
+reports are welcome.
